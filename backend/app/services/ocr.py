@@ -8,6 +8,8 @@ from typing import Any, Union
 import cv2
 import numpy as np
 
+from ..runtime import configure_paddle_runtime
+
 
 PathLike = Union[str, Path]
 
@@ -51,6 +53,8 @@ def _read_image(source: Path) -> np.ndarray:
 
 @lru_cache(maxsize=1)
 def _get_ocr_engine() -> Any:
+    configure_paddle_runtime()
+
     try:
         from paddleocr import PaddleOCR
     except ImportError as exc:

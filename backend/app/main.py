@@ -5,6 +5,10 @@ from uuid import uuid4
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
 
+from .runtime import configure_paddle_runtime
+
+configure_paddle_runtime()
+
 from .services.scan_service import ScanProcessingError, process_scan
 
 
