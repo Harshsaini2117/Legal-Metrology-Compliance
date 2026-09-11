@@ -62,9 +62,29 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
         scan_result = {
             "input_image": "data/raw/generated.png",
             "processed_image": "data/processed/generated_processed.png",
-            "ocr_results": [{"text": "NET QUANTITY 500 g", "confidence": 0.99}],
+            "ocr_results": [
+                {
+                    "text": "NET QUANTITY 500 g",
+                    "confidence": 0.99,
+                    "bounding_box": [[1, 2], [3, 4]],
+                }
+            ],
             "extracted_fields": {"net_quantity": "500 g"},
-            "compliance_report": {"overall_status": "COMPLIANT", "checks": []},
+            "compliance_report": {
+                "overall_status": "UNABLE_TO_VERIFY",
+                "compliance_score": 50,
+                "checks": [
+                    {"rule_id": "LMPC-R6-04", "field": "net_quantity", "status": "PASS"},
+                    {
+                        "rule_id": "LMPC-R6-05",
+                        "field": "mrp",
+                        "status": "NOT_APPLICABLE",
+                        "verification_status": "UNABLE_TO_VERIFY",
+                    },
+                    {"rule_id": "LMPC-R6-06", "field": "tax", "status": "FAIL"},
+                ],
+                "violations": [{"rule_id": "LMPC-R6-06", "field": "tax"}],
+            },
             "processing_status": "COMPLETED",
         }
 
@@ -95,6 +115,30 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response["report_filename"], generated_report.name)
             self.assertIn("scan_id", response)
             self.assertIn("scan_timestamp", response)
+            self.assertEqual(
+                response["summary"],
+                {
+                    "overall_status": "UNABLE_TO_VERIFY",
+                    "compliance_score": 50,
+                    "total_checks": 3,
+                    "passed_checks": 1,
+                    "failed_checks": 1,
+                    "unable_to_verify_checks": 1,
+                    "violation_count": 1,
+                },
+            )
+            self.assertEqual(
+                response["evidence"],
+                [
+                    {
+                        "detected_text": "NET QUANTITY 500 g",
+                        "confidence": 0.99,
+                        "bounding_box": [[1, 2], [3, 4]],
+                        "related_field": "net_quantity",
+                        "related_check": "LMPC-R6-04",
+                    }
+                ],
+            )
             saved_files = list(upload_dir.glob("*.png"))
             self.assertEqual(len(saved_files), 1)
             self.assertEqual(saved_files[0].read_bytes(), PNG_BYTES)
@@ -104,6 +148,7 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
                 report_dir / f"{saved_files[0].stem}_compliance_report.pdf",
             )
             persisted = repository.get_scan(response["scan_id"])
+            self.assertEqual(persisted["scan_id"], response["scan_id"])
             self.assertEqual(persisted["original_filename"], "product.png")
             self.assertEqual(persisted["report_filename"], generated_report.name)
 

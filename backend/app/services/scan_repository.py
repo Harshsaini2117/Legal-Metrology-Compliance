@@ -15,11 +15,16 @@ class ScanRepository:
     def __init__(self, database_path: str | Path) -> None:
         self.database_path = Path(database_path)
 
-    def create_scan(self, scan_result: dict[str, Any], original_filename: str | None) -> dict[str, Any]:
+    def create_scan(
+        self,
+        scan_result: dict[str, Any],
+        original_filename: str | None,
+        scan_id: str | None = None,
+    ) -> dict[str, Any]:
         """Store a completed scan and return its persisted history record."""
         compliance_report = _mapping(scan_result.get("compliance_report"))
         record = {
-            "scan_id": uuid4().hex,
+            "scan_id": scan_id or uuid4().hex,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "original_filename": original_filename or Path(str(scan_result.get("input_image", ""))).name,
             "processing_status": scan_result.get("processing_status", "COMPLETED"),

@@ -11,6 +11,7 @@ configure_paddle_runtime()
 
 from .services.report_generator import generate_compliance_report
 from .services.scan_repository import ScanRepository
+from .services.scan_response import build_summary, normalize_evidence
 from .services.scan_service import ScanProcessingError, process_scan
 
 
@@ -123,6 +124,14 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
             detail={"message": "Scan processing failed.", "stage": "unknown"},
         ) from exc
 
+    scan_result["scan_id"] = uuid4().hex
+    scan_result["summary"] = build_summary(scan_result.get("compliance_report"))
+    scan_result["evidence"] = normalize_evidence(
+        scan_result.get("ocr_results"),
+        scan_result.get("extracted_fields"),
+        scan_result.get("compliance_report"),
+    )
+
     report_path = REPORT_DIR / f"{saved_image.stem}_compliance_report.pdf"
     try:
         generated_report = generate_compliance_report(scan_result, report_path)
@@ -135,11 +144,12 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
         scan_result["report_filename"] = generated_report.name
 
     try:
-        persisted_scan = SCAN_REPOSITORY.create_scan(scan_result, file.filename)
+        persisted_scan = SCAN_REPOSITORY.create_scan(
+            scan_result, file.filename, scan_id=scan_result["scan_id"]
+        )
     except Exception as exc:
         scan_result["persistence_error"] = f"Scan history could not be saved: {exc}"
     else:
-        scan_result["scan_id"] = persisted_scan["scan_id"]
         scan_result["scan_timestamp"] = persisted_scan["timestamp"]
 
     return scan_result
