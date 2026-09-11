@@ -18,12 +18,14 @@ class ScanServiceTests(unittest.TestCase):
         ]
         fields = {"product_name": None, "net_quantity": "500 g", "mrp": None}
         report = {"overall_status": "UNABLE_TO_VERIFY", "compliance_score": None, "checks": [], "violations": []}
+        evidence_image = Path("data/evidence/product_evidence.png")
 
         with (
             patch("backend.app.services.scan_service.preprocess_image", return_value=processed_image) as preprocess,
             patch("backend.app.services.scan_service.extract_text", return_value=ocr_results) as ocr,
             patch("backend.app.services.scan_service.extract_fields", return_value=fields) as extractor,
             patch("backend.app.services.scan_service.evaluate_compliance", return_value=report) as rules,
+            patch("backend.app.services.scan_service.render_evidence_image", return_value=evidence_image) as renderer,
         ):
             result = process_scan(input_image, processed_image)
 
@@ -31,11 +33,15 @@ class ScanServiceTests(unittest.TestCase):
         ocr.assert_called_once_with(processed_image)
         extractor.assert_called_once_with(ocr_results)
         rules.assert_called_once_with(fields)
+        renderer.assert_called_once_with(
+            input_image, ocr_results, report, fields, coordinate_image_path=processed_image
+        )
         self.assertEqual(result["input_image"], str(input_image))
         self.assertEqual(result["processed_image"], str(processed_image))
         self.assertEqual(result["ocr_results"], ocr_results)
         self.assertEqual(result["extracted_fields"], fields)
         self.assertEqual(result["compliance_report"], report)
+        self.assertEqual(result["evidence_image_path"], str(evidence_image))
         self.assertEqual(result["processing_status"], "COMPLETED")
 
     def test_wraps_stage_failures_with_the_stage_name(self):

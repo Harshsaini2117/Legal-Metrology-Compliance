@@ -85,6 +85,7 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
                 ],
                 "violations": [{"rule_id": "LMPC-R6-06", "field": "tax"}],
             },
+            "evidence_image_path": "data/evidence/generated_evidence.png",
             "processing_status": "COMPLETED",
         }
 
@@ -110,6 +111,7 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response["ocr_results"], scan_result["ocr_results"])
             self.assertEqual(response["extracted_fields"], scan_result["extracted_fields"])
             self.assertEqual(response["compliance_report"], scan_result["compliance_report"])
+            self.assertEqual(response["evidence_image_path"], scan_result["evidence_image_path"])
             self.assertEqual(response["processing_status"], scan_result["processing_status"])
             self.assertEqual(response["report_path"], str(generated_report))
             self.assertEqual(response["report_filename"], generated_report.name)

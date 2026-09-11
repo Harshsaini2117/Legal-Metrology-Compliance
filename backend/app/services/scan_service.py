@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Union
 
 from .field_extractor import extract_fields
+from .evidence_renderer import render_evidence_image
 from .ocr import extract_text
 from .preprocessing import preprocess_image
 from .rules_engine import evaluate_compliance
@@ -39,7 +40,8 @@ def process_scan(
     Raises:
         ScanProcessingError: If any pipeline stage fails. The ``stage``
             attribute identifies ``preprocessing``, ``ocr``,
-            ``field_extraction``, or ``rules_evaluation``.
+            ``field_extraction``, ``rules_evaluation``, or
+            ``evidence_rendering``.
     """
     source = Path(input_image)
     destination = Path(processed_output_path) if processed_output_path else _default_output_path(source)
@@ -64,12 +66,24 @@ def process_scan(
     except Exception as exc:
         raise ScanProcessingError("rules_evaluation", str(exc)) from exc
 
+    try:
+        evidence_image = render_evidence_image(
+            source,
+            ocr_results,
+            compliance_report,
+            extracted_fields,
+            coordinate_image_path=processed_image,
+        )
+    except Exception as exc:
+        raise ScanProcessingError("evidence_rendering", str(exc)) from exc
+
     return {
         "input_image": str(source),
         "processed_image": str(processed_image),
         "ocr_results": ocr_results,
         "extracted_fields": extracted_fields,
         "compliance_report": compliance_report,
+        "evidence_image_path": str(evidence_image),
         "processing_status": "COMPLETED",
     }
 
