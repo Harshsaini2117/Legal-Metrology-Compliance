@@ -48,6 +48,34 @@ class FieldExtractorTests(unittest.TestCase):
         self.assertEqual(fields["net_quantity"], "500 g")
         self.assertTrue(all(value is None for key, value in fields.items() if key != "net_quantity"))
 
+    def test_extracts_real_sample_label_declarations_with_ocr_separator_noise(self):
+        fields = extract_fields(
+            [
+                {"text": "Manufactured by: Payless India Franchising, LLC"},
+                {"text": "Topeka, USA 66607"},
+                {"text": "Imported & Marketed by : Reliance Clothing India Pvt. Ltd."},
+                {"text": "3rd Floor,Court Houss,Lokmanya Tilak Marg Dhobi Talao"},
+                {"text": "Mumbal: - 400002"},
+                {"text": "Net Contents"},
+                {"text": "2 N (1 Pair)"},
+                {"text": "Product: WO4-FR-CCP-KARMEN"},
+                {"text": "Month & Year of Import : : 07 / 2018"},
+                {"text": "MRP:899/-"},
+            ]
+        )
+
+        self.assertEqual(fields["product_name"], "WO4-FR-CCP-KARMEN")
+        self.assertEqual(fields["mrp"], "899")
+        self.assertEqual(fields["net_quantity"], "1 Pair")
+        self.assertEqual(fields["manufacturer"], "Payless India Franchising, LLC")
+        self.assertEqual(fields["manufacturer_address"], "Topeka, USA 66607")
+        self.assertEqual(fields["importer"], "Reliance Clothing India Pvt. Ltd.")
+        self.assertEqual(
+            fields["importer_address"],
+            "3rd Floor,Court Houss,Lokmanya Tilak Marg Dhobi Talao Mumbal: - 400002",
+        )
+        self.assertEqual(fields["month_year"], "07/2018")
+
     def test_ignores_malformed_ocr_entries(self):
         self.assertEqual(extract_fields([{}, {"text": None}, "not an OCR result"]), {field: None for field in FIELD_NAMES})
 

@@ -27,8 +27,8 @@ _MONTH_YEAR_PATTERN = re.compile(
     r"^(?:0[1-9]|1[0-2])/(?:\d{2}|\d{4})$|^[A-Za-z]{3,9}\s+\d{2,4}$"
 )
 _NET_QUANTITY_PATTERN = re.compile(
-    r"^\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|cl|m|cm|mm|m2|cm2|pcs?|pieces?|nos?|units?)"
-    r"(?:\s*[xX]\s*\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|pcs?|nos?))?$",
+    r"^\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|cl|m|cm|mm|m2|cm2|pcs?|pieces?|nos?|units?|pairs?)"
+    r"(?:\s*[xX]\s*\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|pcs?|nos?|pairs?))?$",
     re.IGNORECASE,
 )
 _MRP_PATTERN = re.compile(r"^\d+(?:\.\d{1,2})?$")

@@ -26,15 +26,15 @@ _MRP_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _NET_QUANTITY_PATTERN = re.compile(
-    r"\bNET\s*(?:QUANTITY|QTY)\s*[:\-]?\s*"
+    r"\bNET\s*(?:QUANTITY|QTY|CONTENTS)\s*[:\-]?\s*(?:[^\n]*?\(\s*)?"
     r"([0-9]+(?:\.\d+)?\s*(?:kgs?|kg|gms?|grams?|g|ml|litres?|liters?|l|"
-    r"pcs?|pieces?|nos?|units?)(?:\s*[xX]\s*[0-9]+(?:\.\d+)?\s*"
-    r"(?:kg|g|ml|l|pcs?|nos?))?)",
+    r"pcs?|pieces?|nos?|units?|pairs?)(?:\s*[xX]\s*[0-9]+(?:\.\d+)?\s*"
+    r"(?:kg|g|ml|l|pcs?|nos?|pairs?))?)",
     re.IGNORECASE,
 )
 _MONTH_YEAR_PATTERN = re.compile(
     r"(?:month\s*(?:&|and)\s*year(?:\s+of\s+(?:import|manufacture|packing))?|"
-    r"mfg\.?|mfd\.?|manufactured\s+on|packed\s+on)\s*[:\-]?\s*"
+    r"mfg\.?|mfd\.?|manufactured\s+on|packed\s+on)\s*(?:[:\-]\s*)*"
     r"([A-Za-z]{3,9}\.?\s*[-/,]?\s*\d{2,4}|\d{1,2}\s*[-/]\s*\d{2,4})",
     re.IGNORECASE,
 )
@@ -43,7 +43,7 @@ _COUNTRY_PATTERN = re.compile(
     r"([A-Za-z][A-Za-z .-]{1,60})",
     re.IGNORECASE,
 )
-_PRODUCT_NAME_PATTERN = re.compile(r"\b(?:product\s*name|name\s*of\s*product)\s*[:\-]\s*(.+)", re.IGNORECASE)
+_PRODUCT_NAME_PATTERN = re.compile(r"\b(?:product(?:\s*name)?|name\s*of\s*product)\s*[:\-]\s*(.+)", re.IGNORECASE)
 _SIZE_PATTERN = re.compile(r"\bsize\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9 .xX/-]{0,40})", re.IGNORECASE)
 
 _ENTITY_PATTERNS = {
@@ -66,10 +66,10 @@ _DIRECT_ADDRESS_PATTERNS = {
     "packer_address": re.compile(r"^\s*packer(?:'s)?\s+address\s*[:\-]?\s*(.*)$", re.IGNORECASE),
 }
 _LABEL_TERMS = re.compile(
-    r"\b(?:m\s*\.?\s*r\s*\.?\s*p\s*\.?|net\s*(?:quantity|qty)|"
+    r"\b(?:m\s*\.?\s*r\s*\.?\s*p\s*\.?|net\s*(?:quantity|qty|contents)|"
     r"manufactured|manufacturer|imported|importer|packed\s+by|packer|"
     r"month\s*(?:&|and)\s*year|mfg\.?|mfd\.?|country\s+of\s+origin|"
-    r"made\s+in|product\s+of|size|product\s*name)\b",
+    r"made\s+in|product\s+of|size|product(?:\s*name)?)\b",
     re.IGNORECASE,
 )
 

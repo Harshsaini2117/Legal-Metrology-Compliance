@@ -73,6 +73,28 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(net_quantity["verification_status"], "UNABLE_TO_VERIFY")
         self.assertEqual(report["violations"], [])
 
+    def test_accepts_pair_count_net_quantity_from_real_sample_label(self):
+        report = evaluate_compliance(
+            {
+                "product_name": "WO4-FR-CCP-KARMEN",
+                "manufacturer": "Payless India Franchising, LLC",
+                "manufacturer_address": "Topeka, USA 66607",
+                "importer": "Reliance Clothing India Pvt. Ltd.",
+                "importer_address": "Mumbai - 400002",
+                "country_of_origin": "Vietnam",
+                "net_quantity": "1 Pair",
+                "mrp": "899",
+                "month_year": "07/2018",
+            }
+        )
+
+        self.assertEqual(check_by_rule(report, "LMPC-R6-01")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-02")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-03")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-04")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-05")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-07")["status"], STATUS_PASS)
+
 
 if __name__ == "__main__":
     unittest.main()
