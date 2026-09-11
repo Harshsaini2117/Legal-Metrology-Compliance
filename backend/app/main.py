@@ -9,6 +9,7 @@ from .runtime import configure_paddle_runtime
 
 configure_paddle_runtime()
 
+from .services.report_generator import generate_compliance_report
 from .services.scan_service import ScanProcessingError, process_scan
 
 
@@ -21,6 +22,7 @@ app = FastAPI(
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_DIR = Path(__file__).resolve().parents[2] / "data" / "reports"
 
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg",
@@ -89,7 +91,7 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
     saved_image = await _save_image(file)
 
     try:
-        return process_scan(saved_image)
+        scan_result = process_scan(saved_image)
     except ScanProcessingError as exc:
         raise HTTPException(
             status_code=500,
@@ -103,6 +105,19 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
             status_code=500,
             detail={"message": "Scan processing failed.", "stage": "unknown"},
         ) from exc
+
+    report_path = REPORT_DIR / f"{saved_image.stem}_compliance_report.pdf"
+    try:
+        generated_report = generate_compliance_report(scan_result, report_path)
+    except Exception as exc:
+        scan_result["report_generation_error"] = (
+            f"Compliance report could not be generated: {exc}"
+        )
+    else:
+        scan_result["report_path"] = str(generated_report)
+        scan_result["report_filename"] = generated_report.name
+
+    return scan_result
 
 
 async def _save_image(file: UploadFile) -> Path:

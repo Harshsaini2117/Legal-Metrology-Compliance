@@ -69,18 +69,64 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             upload_dir = Path(temporary_directory)
+            report_dir = Path(temporary_directory) / "reports"
+            generated_report = report_dir / "generated_compliance_report.pdf"
             with (
                 patch("backend.app.main.UPLOAD_DIR", upload_dir),
+                patch("backend.app.main.REPORT_DIR", report_dir),
                 patch("backend.app.main.process_scan", return_value=scan_result) as process_scan,
+                patch(
+                    "backend.app.main.generate_compliance_report", return_value=generated_report
+                ) as generate_report,
             ):
                 status, response = await self._post_scan("product.png", PNG_BYTES)
 
             self.assertEqual(status, 200)
-            self.assertEqual(response, scan_result)
+            self.assertEqual(response["input_image"], scan_result["input_image"])
+            self.assertEqual(response["processed_image"], scan_result["processed_image"])
+            self.assertEqual(response["ocr_results"], scan_result["ocr_results"])
+            self.assertEqual(response["extracted_fields"], scan_result["extracted_fields"])
+            self.assertEqual(response["compliance_report"], scan_result["compliance_report"])
+            self.assertEqual(response["processing_status"], scan_result["processing_status"])
+            self.assertEqual(response["report_path"], str(generated_report))
+            self.assertEqual(response["report_filename"], generated_report.name)
             saved_files = list(upload_dir.glob("*.png"))
             self.assertEqual(len(saved_files), 1)
             self.assertEqual(saved_files[0].read_bytes(), PNG_BYTES)
             process_scan.assert_called_once_with(saved_files[0])
+            generate_report.assert_called_once_with(
+                scan_result,
+                report_dir / f"{saved_files[0].stem}_compliance_report.pdf",
+            )
+
+    async def test_scan_returns_result_when_report_generation_fails(self):
+        scan_result = {
+            "input_image": "data/raw/generated.png",
+            "processed_image": "data/processed/generated_processed.png",
+            "ocr_results": [],
+            "extracted_fields": {"net_quantity": "500 g"},
+            "compliance_report": {"overall_status": "UNABLE_TO_VERIFY", "checks": []},
+            "processing_status": "COMPLETED",
+        }
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with (
+                patch("backend.app.main.UPLOAD_DIR", Path(temporary_directory)),
+                patch("backend.app.main.REPORT_DIR", Path(temporary_directory) / "reports"),
+                patch("backend.app.main.process_scan", return_value=scan_result),
+                patch(
+                    "backend.app.main.generate_compliance_report",
+                    side_effect=OSError("disk unavailable"),
+                ),
+            ):
+                status, response = await self._post_scan("product.png", PNG_BYTES)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response["input_image"], scan_result["input_image"])
+        self.assertEqual(response["compliance_report"], scan_result["compliance_report"])
+        self.assertEqual(response["processing_status"], "COMPLETED")
+        self.assertNotIn("report_path", response)
+        self.assertIn("Compliance report could not be generated: disk unavailable", response["report_generation_error"])
 
     async def test_scan_rejects_non_image_upload(self):
         status, response = await self._post_scan("not-an-image.png", b"not an image")
