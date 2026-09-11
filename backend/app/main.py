@@ -89,7 +89,7 @@ async def upload_product_image(file: UploadFile = File(...)):
 @app.get("/scans")
 def list_scans(limit: int = Query(default=20, ge=1, le=100)):
     """Return recent completed scans, newest first."""
-    return SCAN_REPOSITORY.list_recent(limit)
+    return [_scan_history_summary(scan) for scan in SCAN_REPOSITORY.list_recent(limit)]
 
 
 @app.get("/scans/{scan_id}")
@@ -98,7 +98,7 @@ def get_scan(scan_id: str):
     scan = SCAN_REPOSITORY.get_scan(scan_id)
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan history record not found.")
-    return scan
+    return _scan_history_detail(scan)
 
 
 @app.get("/scans/{scan_id}/report")
@@ -108,21 +108,64 @@ def download_scan_report(scan_id: str):
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan history record not found.")
 
-    report_path = scan.get("report_path")
-    if not report_path:
-        raise HTTPException(status_code=404, detail="PDF report not found for this scan.")
-
-    try:
-        resolved_report = Path(report_path).resolve(strict=True)
-        resolved_report.relative_to(REPORT_DIR.resolve())
-    except (OSError, ValueError):
-        raise HTTPException(status_code=404, detail="PDF report not found for this scan.") from None
-
-    if not resolved_report.is_file() or resolved_report.suffix.lower() != ".pdf":
+    resolved_report = _resolve_report_path(scan.get("report_path"))
+    if resolved_report is None:
         raise HTTPException(status_code=404, detail="PDF report not found for this scan.")
 
     filename = Path(str(scan.get("report_filename") or resolved_report.name)).name
     return FileResponse(resolved_report, media_type="application/pdf", filename=filename)
+
+
+def _scan_history_summary(scan: dict) -> dict:
+    """Build the compact scan-history item consumed by the frontend."""
+    compliance_summary = scan.get("compliance_report_summary")
+    if not isinstance(compliance_summary, dict):
+        compliance_summary = {}
+    violations = scan.get("violations")
+    report_url = _report_download_url(scan)
+
+    return {
+        "scan_id": scan.get("scan_id"),
+        "scan_timestamp": scan.get("timestamp"),
+        "timestamp": scan.get("timestamp"),
+        "original_filename": scan.get("original_filename"),
+        "processing_status": scan.get("processing_status"),
+        "overall_status": compliance_summary.get("overall_status"),
+        "compliance_score": compliance_summary.get("compliance_score"),
+        "violation_count": len(violations) if isinstance(violations, list) else 0,
+        "report_available": report_url is not None,
+        "report_filename": scan.get("report_filename") if report_url else None,
+        "report_url": report_url,
+    }
+
+
+def _scan_history_detail(scan: dict) -> dict:
+    """Return all persisted scan data plus frontend-friendly summary fields."""
+    detail = dict(scan)
+    detail.update(_scan_history_summary(scan))
+    detail.pop("report_path", None)
+    return detail
+
+
+def _report_download_url(scan: dict) -> str | None:
+    if _resolve_report_path(scan.get("report_path")) is None:
+        return None
+    scan_id = scan.get("scan_id")
+    return f"/scans/{scan_id}/report" if isinstance(scan_id, str) and scan_id else None
+
+
+def _resolve_report_path(report_path: object) -> Path | None:
+    """Return an existing report only when it remains inside ``REPORT_DIR``."""
+    if not isinstance(report_path, str) or not report_path:
+        return None
+    try:
+        resolved_report = Path(report_path).resolve(strict=True)
+        resolved_report.relative_to(REPORT_DIR.resolve())
+    except (OSError, ValueError):
+        return None
+    if not resolved_report.is_file() or resolved_report.suffix.lower() != ".pdf":
+        return None
+    return resolved_report
 
 
 @app.post("/scan")
