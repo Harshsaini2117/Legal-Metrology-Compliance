@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
 from .runtime import configure_paddle_runtime
@@ -98,6 +99,30 @@ def get_scan(scan_id: str):
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan history record not found.")
     return scan
+
+
+@app.get("/scans/{scan_id}/report")
+def download_scan_report(scan_id: str):
+    """Download the PDF report associated with a persisted scan."""
+    scan = SCAN_REPOSITORY.get_scan(scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan history record not found.")
+
+    report_path = scan.get("report_path")
+    if not report_path:
+        raise HTTPException(status_code=404, detail="PDF report not found for this scan.")
+
+    try:
+        resolved_report = Path(report_path).resolve(strict=True)
+        resolved_report.relative_to(REPORT_DIR.resolve())
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail="PDF report not found for this scan.") from None
+
+    if not resolved_report.is_file() or resolved_report.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=404, detail="PDF report not found for this scan.")
+
+    filename = Path(str(scan.get("report_filename") or resolved_report.name)).name
+    return FileResponse(resolved_report, media_type="application/pdf", filename=filename)
 
 
 @app.post("/scan")
