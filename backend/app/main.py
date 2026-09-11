@@ -2,7 +2,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from .runtime import configure_paddle_runtime
@@ -10,6 +10,7 @@ from .runtime import configure_paddle_runtime
 configure_paddle_runtime()
 
 from .services.report_generator import generate_compliance_report
+from .services.scan_repository import ScanRepository
 from .services.scan_service import ScanProcessingError, process_scan
 
 
@@ -23,6 +24,7 @@ app = FastAPI(
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_DIR = Path(__file__).resolve().parents[2] / "data" / "reports"
+SCAN_REPOSITORY = ScanRepository(Path(__file__).resolve().parents[2] / "data" / "scans.db")
 
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg",
@@ -82,6 +84,21 @@ async def upload_product_image(file: UploadFile = File(...)):
     }
 
 
+@app.get("/scans")
+def list_scans(limit: int = Query(default=20, ge=1, le=100)):
+    """Return recent completed scans, newest first."""
+    return SCAN_REPOSITORY.list_recent(limit)
+
+
+@app.get("/scans/{scan_id}")
+def get_scan(scan_id: str):
+    """Return a single persisted completed scan."""
+    scan = SCAN_REPOSITORY.get_scan(scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan history record not found.")
+    return scan
+
+
 @app.post("/scan")
 async def scan_product_image(file: UploadFile | None = File(default=None)):
     """Store one product image and run the existing scan-service pipeline."""
@@ -116,6 +133,14 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
     else:
         scan_result["report_path"] = str(generated_report)
         scan_result["report_filename"] = generated_report.name
+
+    try:
+        persisted_scan = SCAN_REPOSITORY.create_scan(scan_result, file.filename)
+    except Exception as exc:
+        scan_result["persistence_error"] = f"Scan history could not be saved: {exc}"
+    else:
+        scan_result["scan_id"] = persisted_scan["scan_id"]
+        scan_result["scan_timestamp"] = persisted_scan["timestamp"]
 
     return scan_result
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from backend.app.main import app
+from backend.app.services.scan_repository import ScanRepository
 from backend.app.services.scan_service import ScanProcessingError
 
 
@@ -71,9 +72,11 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             upload_dir = Path(temporary_directory)
             report_dir = Path(temporary_directory) / "reports"
             generated_report = report_dir / "generated_compliance_report.pdf"
+            repository = ScanRepository(Path(temporary_directory) / "scans.db")
             with (
                 patch("backend.app.main.UPLOAD_DIR", upload_dir),
                 patch("backend.app.main.REPORT_DIR", report_dir),
+                patch("backend.app.main.SCAN_REPOSITORY", repository),
                 patch("backend.app.main.process_scan", return_value=scan_result) as process_scan,
                 patch(
                     "backend.app.main.generate_compliance_report", return_value=generated_report
@@ -90,6 +93,8 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response["processing_status"], scan_result["processing_status"])
             self.assertEqual(response["report_path"], str(generated_report))
             self.assertEqual(response["report_filename"], generated_report.name)
+            self.assertIn("scan_id", response)
+            self.assertIn("scan_timestamp", response)
             saved_files = list(upload_dir.glob("*.png"))
             self.assertEqual(len(saved_files), 1)
             self.assertEqual(saved_files[0].read_bytes(), PNG_BYTES)
@@ -98,6 +103,9 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
                 scan_result,
                 report_dir / f"{saved_files[0].stem}_compliance_report.pdf",
             )
+            persisted = repository.get_scan(response["scan_id"])
+            self.assertEqual(persisted["original_filename"], "product.png")
+            self.assertEqual(persisted["report_filename"], generated_report.name)
 
     async def test_scan_returns_result_when_report_generation_fails(self):
         scan_result = {
@@ -113,6 +121,7 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             with (
                 patch("backend.app.main.UPLOAD_DIR", Path(temporary_directory)),
                 patch("backend.app.main.REPORT_DIR", Path(temporary_directory) / "reports"),
+                patch("backend.app.main.SCAN_REPOSITORY", ScanRepository(Path(temporary_directory) / "scans.db")),
                 patch("backend.app.main.process_scan", return_value=scan_result),
                 patch(
                     "backend.app.main.generate_compliance_report",

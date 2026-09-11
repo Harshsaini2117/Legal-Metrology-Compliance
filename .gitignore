@@ -32,6 +32,7 @@ Thumbs.db
 data/raw/
 data/processed/
 data/reports/
+data/scans.db
 
 # Secrets
 *.key
