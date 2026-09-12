@@ -73,6 +73,31 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(net_quantity["verification_status"], "UNABLE_TO_VERIFY")
         self.assertEqual(report["violations"], [])
 
+    def test_incomplete_checks_do_not_receive_a_full_compliance_score(self):
+        report = evaluate_compliance(
+            {
+                "product_name": "Herbal Tea",
+                "manufacturer": "NatureFresh Foods Pvt. Ltd.",
+                "manufacturer_address": "New Delhi",
+                "importer": "Global Imports LLP",
+                "importer_address": "Mumbai",
+                "country_of_origin": "India",
+                "is_imported": True,
+                "net_quantity": "100 g",
+                "mrp": "299.00",
+                "mrp_inclusive_of_taxes": "inclusive of all taxes",
+                "month_year": "06/2025",
+                "unit_sale_price_applicable": False,
+                "size_relevant": False,
+            }
+        )
+
+        self.assertEqual(check_by_rule(report, "LMPC-R6-05")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-06")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-08")["verification_status"], "UNABLE_TO_VERIFY")
+        self.assertEqual(report["overall_status"], "UNABLE_TO_VERIFY")
+        self.assertEqual(report["compliance_score"], 88)
+
     def test_accepts_pair_count_net_quantity_from_real_sample_label(self):
         report = evaluate_compliance(
             {
@@ -84,7 +109,12 @@ class RulesEngineTests(unittest.TestCase):
                 "country_of_origin": "Vietnam",
                 "net_quantity": "1 Pair",
                 "mrp": "899",
+                "mrp_inclusive_of_taxes": "inclusive of all taxes",
                 "month_year": "07/2018",
+                "consumer_care": (
+                    "Toll Free No. 1800 891 2646 "
+                    "Email: customercare@reliancebrands.com"
+                ),
             }
         )
 
@@ -93,7 +123,9 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(check_by_rule(report, "LMPC-R6-03")["status"], STATUS_PASS)
         self.assertEqual(check_by_rule(report, "LMPC-R6-04")["status"], STATUS_PASS)
         self.assertEqual(check_by_rule(report, "LMPC-R6-05")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-06")["status"], STATUS_PASS)
         self.assertEqual(check_by_rule(report, "LMPC-R6-07")["status"], STATUS_PASS)
+        self.assertEqual(check_by_rule(report, "LMPC-R6-08")["status"], STATUS_PASS)
 
 
 if __name__ == "__main__":

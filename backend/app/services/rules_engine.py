@@ -85,9 +85,13 @@ def evaluate_compliance(declarations: Mapping[str, Any] | None) -> dict[str, Any
 
     checks = [evaluator(data, definition) for definition, evaluator in zip(RULE_DEFINITIONS, evaluators)]
     violations = [check for check in checks if check["status"] == STATUS_FAIL]
-    verifiable_checks = [check for check in checks if check["status"] != STATUS_NOT_APPLICABLE]
-    passed = sum(check["status"] == STATUS_PASS for check in verifiable_checks)
-    score = round((passed / len(verifiable_checks)) * 100) if verifiable_checks else None
+    scored_checks = [
+        check
+        for check in checks
+        if check["verification_status"] != "NOT_APPLICABLE"
+    ]
+    passed = sum(check["status"] == STATUS_PASS for check in scored_checks)
+    score = round((passed / len(scored_checks)) * 100) if scored_checks else None
 
     if violations:
         overall_status = "NON_COMPLIANT"
@@ -145,7 +149,7 @@ def _check_mrp_tax_inclusion(data: Mapping[str, Any], rule: RuleDefinition) -> d
         return _pass(rule, "MRP is explicitly marked inclusive of all taxes.")
     if evidence is False:
         return _fail(rule, "MRP is explicitly marked as not inclusive of all taxes.")
-    if isinstance(data.get("mrp"), str) and re.search(r"inclusive\s+of\s+all\s+tax", data["mrp"], re.IGNORECASE):
+    if isinstance(evidence, str) and re.search(r"inclusive\s+of\s+(?:all\s+)?tax", evidence, re.IGNORECASE):
         return _pass(rule, "MRP text indicates inclusion of all taxes.")
     return _unable(rule, "Tax-inclusion wording was not available in the normalized OCR fields.")
 

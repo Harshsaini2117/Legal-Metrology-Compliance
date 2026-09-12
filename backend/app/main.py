@@ -1,4 +1,5 @@
 from io import BytesIO
+import logging
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,6 +15,9 @@ from .services.report_generator import generate_compliance_report
 from .services.scan_repository import ScanRepository
 from .services.scan_response import build_summary, normalize_evidence
 from .services.scan_service import ScanProcessingError, process_scan
+
+
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
@@ -179,6 +183,7 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
     try:
         scan_result = process_scan(saved_image)
     except ScanProcessingError as exc:
+        logger.exception("Scan processing failed during %s: %s", exc.stage, exc)
         raise HTTPException(
             status_code=500,
             detail={

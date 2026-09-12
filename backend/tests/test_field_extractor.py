@@ -26,6 +26,7 @@ class FieldExtractorTests(unittest.TestCase):
             {
                 "product_name": "NATUREFRESH HERBAL TEA",
                 "mrp": "299",
+                "mrp_inclusive_of_taxes": "Inclusive of all taxes",
                 "net_quantity": "100 g",
                 "manufacturer": "NatureFresh Foods Pvt. Ltd.",
                 "manufacturer_address": "Plot 12, Sector 4, New Delhi - 110020, India",
@@ -36,6 +37,7 @@ class FieldExtractorTests(unittest.TestCase):
                 "month_year": "06/2025",
                 "country_of_origin": "India",
                 "size": "250 ml",
+                "consumer_care": None,
             },
         )
 
@@ -60,12 +62,16 @@ class FieldExtractorTests(unittest.TestCase):
                 {"text": "2 N (1 Pair)"},
                 {"text": "Product: WO4-FR-CCP-KARMEN"},
                 {"text": "Month & Year of Import : : 07 / 2018"},
-                {"text": "MRP:899/-"},
+                {"text": "MRP: ₹899/- (inclusive of all taxes)"},
+                {"text": "For consumer related queries, please contact:"},
+                {"text": "Toll Free No. 1800 891 2646"},
+                {"text": "Email: customercare@reliancebrands.com"},
             ]
         )
 
         self.assertEqual(fields["product_name"], "WO4-FR-CCP-KARMEN")
         self.assertEqual(fields["mrp"], "899")
+        self.assertEqual(fields["mrp_inclusive_of_taxes"], "inclusive of all taxes")
         self.assertEqual(fields["net_quantity"], "1 Pair")
         self.assertEqual(fields["manufacturer"], "Payless India Franchising, LLC")
         self.assertEqual(fields["manufacturer_address"], "Topeka, USA 66607")
@@ -75,6 +81,20 @@ class FieldExtractorTests(unittest.TestCase):
             "3rd Floor,Court Houss,Lokmanya Tilak Marg Dhobi Talao Mumbal: - 400002",
         )
         self.assertEqual(fields["month_year"], "07/2018")
+        self.assertEqual(
+            fields["consumer_care"],
+            "Toll Free No. 1800 891 2646 Email: customercare@reliancebrands.com",
+        )
+
+    def test_extracts_consumer_care_from_noisy_ocr_phone_evidence(self):
+        fields = extract_fields(
+            [
+                {"text": "C0nsumr c@re hclp desk"},
+                {"text": "For asstnc call 1800-891-2646"},
+            ]
+        )
+
+        self.assertEqual(fields["consumer_care"], "For asstnc call 1800-891-2646")
 
     def test_ignores_malformed_ocr_entries(self):
         self.assertEqual(extract_fields([{}, {"text": None}, "not an OCR result"]), {field: None for field in FIELD_NAMES})

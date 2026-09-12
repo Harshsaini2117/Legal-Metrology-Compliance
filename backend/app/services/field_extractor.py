@@ -8,6 +8,7 @@ from typing import Any
 FIELD_NAMES = (
     "product_name",
     "mrp",
+    "mrp_inclusive_of_taxes",
     "net_quantity",
     "manufacturer",
     "manufacturer_address",
@@ -18,11 +19,16 @@ FIELD_NAMES = (
     "month_year",
     "country_of_origin",
     "size",
+    "consumer_care",
 )
 
 _MRP_PATTERN = re.compile(
     r"\bM\s*\.?\s*R\s*\.?\s*P\s*\.?[^\d\n]{0,40}"
     r"(?:₹|Rs\.?|INR)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)",
+    re.IGNORECASE,
+)
+_MRP_TAX_INCLUSION_PATTERN = re.compile(
+    r"\b(inclusive\s+of\s+(?:all\s+)?tax(?:es)?|incl\.?\s*(?:of\s+)?(?:all\s+)?tax(?:es)?)\b",
     re.IGNORECASE,
 )
 _NET_QUANTITY_PATTERN = re.compile(
@@ -45,6 +51,17 @@ _COUNTRY_PATTERN = re.compile(
 )
 _PRODUCT_NAME_PATTERN = re.compile(r"\b(?:product(?:\s*name)?|name\s*of\s*product)\s*[:\-]\s*(.+)", re.IGNORECASE)
 _SIZE_PATTERN = re.compile(r"\bsize\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9 .xX/-]{0,40})", re.IGNORECASE)
+_CONSUMER_CARE_PATTERN = re.compile(
+    r"^\s*(?:(?:for\s+)?(?:consumer|customer)(?:\s+related)?\s*(?:care|complaints?|queries?|service)"
+    r"(?:\s*,?\s*please\s+contact)?"
+    r"(?:\s*(?:details?|contact))?|for\s+(?:consumer|customer)\s+(?:queries?|complaints?)"
+    r"\s*,?\s*please\s+contact)\s*[:\-]?\s*(.*)$",
+    re.IGNORECASE,
+)
+_INDIAN_CONTACT_PATTERN = re.compile(
+    r"(?<!\d)(?:\+91[\s-]*)?[6-9](?:[\s-]*\d){9}(?!\d)|"
+    r"(?<!\d)1800(?:[\s-]*\d){7}(?!\d)"
+)
 
 _ENTITY_PATTERNS = {
     "manufacturer": re.compile(
@@ -69,7 +86,8 @@ _LABEL_TERMS = re.compile(
     r"\b(?:m\s*\.?\s*r\s*\.?\s*p\s*\.?|net\s*(?:quantity|qty|contents)|"
     r"manufactured|manufacturer|imported|importer|packed\s+by|packer|"
     r"month\s*(?:&|and)\s*year|mfg\.?|mfd\.?|country\s+of\s+origin|"
-    r"made\s+in|product\s+of|size|product(?:\s*name)?)\b",
+    r"made\s+in|product\s+of|size|product(?:\s*name)?|(?:consumer|customer)\s*"
+    r"(?:care|complaints?|queries?|service))\b",
     re.IGNORECASE,
 )
 
@@ -87,10 +105,14 @@ def extract_fields(ocr_results: Iterable[Mapping[str, Any]] | None) -> dict[str,
 
     fields["product_name"] = _first_group(_PRODUCT_NAME_PATTERN, text) or _product_name_fallback(lines)
     fields["mrp"] = _normalize_mrp(_first_group(_MRP_PATTERN, text))
+    fields["mrp_inclusive_of_taxes"] = _normalize_value(
+        _first_group(_MRP_TAX_INCLUSION_PATTERN, text)
+    )
     fields["net_quantity"] = _normalize_quantity(_first_group(_NET_QUANTITY_PATTERN, text))
     fields["month_year"] = _normalize_month_year(_first_group(_MONTH_YEAR_PATTERN, text))
     fields["country_of_origin"] = _normalize_value(_first_group(_COUNTRY_PATTERN, text))
     fields["size"] = _normalize_value(_first_group(_SIZE_PATTERN, text))
+    fields["consumer_care"] = _extract_consumer_care(lines)
 
     for entity, pattern in _ENTITY_PATTERNS.items():
         name, address = _extract_entity(lines, pattern)
@@ -103,6 +125,27 @@ def extract_fields(ocr_results: Iterable[Mapping[str, Any]] | None) -> dict[str,
             fields[field] = _normalize_value(direct_address)
 
     return fields
+
+
+def _extract_consumer_care(lines: list[str]) -> str | None:
+    for index, line in enumerate(lines):
+        match = _CONSUMER_CARE_PATTERN.match(line)
+        if not match:
+            continue
+
+        section = [_normalize_value(match.group(1))]
+        for following_line in lines[index + 1 :]:
+            if any(pattern.match(following_line) for pattern in _ENTITY_PATTERNS.values()) or any(
+                pattern.match(following_line) for pattern in _DIRECT_ADDRESS_PATTERNS.values()
+            ):
+                break
+            section.append(following_line)
+        return _normalize_value(" ".join(value for value in section if value))
+
+    for line in lines:
+        if _INDIAN_CONTACT_PATTERN.search(line):
+            return line
+    return None
 
 
 def _ocr_lines(ocr_results: Iterable[Mapping[str, Any]] | None) -> list[str]:
