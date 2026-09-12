@@ -59,7 +59,8 @@ _CONSUMER_CARE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _INDIAN_CONTACT_PATTERN = re.compile(
-    r"(?<!\d)(?:\+91[\s-]*)?[6-9](?:[\s-]*\d){9}(?!\d)|"
+    r"(?<!\d)\+91(?:[\s-]*\d){10}(?!\d)|"
+    r"(?<!\d)[6-9](?:[\s-]*\d){9}(?!\d)|"
     r"(?<!\d)1800(?:[\s-]*\d){7}(?!\d)"
 )
 
@@ -140,11 +141,21 @@ def _extract_consumer_care(lines: list[str]) -> str | None:
             ):
                 break
             section.append(following_line)
+        phone_number = _first_phone_number(section)
+        if phone_number:
+            return phone_number
         return _normalize_value(" ".join(value for value in section if value))
 
-    for line in lines:
-        if _INDIAN_CONTACT_PATTERN.search(line):
-            return line
+    return _first_phone_number(lines)
+
+
+def _first_phone_number(values: Iterable[str | None]) -> str | None:
+    for value in values:
+        if not value:
+            continue
+        match = _INDIAN_CONTACT_PATTERN.search(value)
+        if match:
+            return _normalize_value(match.group(0))
     return None
 
 

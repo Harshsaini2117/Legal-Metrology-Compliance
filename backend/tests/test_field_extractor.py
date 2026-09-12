@@ -83,7 +83,7 @@ class FieldExtractorTests(unittest.TestCase):
         self.assertEqual(fields["month_year"], "07/2018")
         self.assertEqual(
             fields["consumer_care"],
-            "Toll Free No. 1800 891 2646 Email: customercare@reliancebrands.com",
+            "1800 891 2646",
         )
 
     def test_extracts_consumer_care_from_noisy_ocr_phone_evidence(self):
@@ -94,7 +94,31 @@ class FieldExtractorTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(fields["consumer_care"], "For asstnc call 1800-891-2646")
+        self.assertEqual(fields["consumer_care"], "1800-891-2646")
+
+    def test_extracts_consumer_care_from_noisy_indian_landline_ocr(self):
+        noisy_ocr = "fo tetal rparspee re b importa a toe dress trai l astreeig ionor al 1 +91-22-6727-6727"
+
+        fields = extract_fields([{"text": noisy_ocr}])
+
+        self.assertEqual(fields["consumer_care"], "+91-22-6727-6727")
+
+    def test_extracts_spaced_indian_consumer_care_phone_without_ocr_noise(self):
+        fields = extract_fields(
+            [{"text": "Consumer care desk: please call +91 22 6727 6727 for assistance"}]
+        )
+
+        self.assertEqual(fields["consumer_care"], "+91 22 6727 6727")
+
+    def test_extracts_parenthesized_pair_as_net_quantity(self):
+        fields = extract_fields(
+            [
+                {"text": "Net Contents"},
+                {"text": "2 N (1 Pair)"},
+            ]
+        )
+
+        self.assertEqual(fields["net_quantity"], "1 Pair")
 
     def test_ignores_malformed_ocr_entries(self):
         self.assertEqual(extract_fields([{}, {"text": None}, "not an OCR result"]), {field: None for field in FIELD_NAMES})

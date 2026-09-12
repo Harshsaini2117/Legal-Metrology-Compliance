@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
@@ -24,6 +25,13 @@ app = FastAPI(
     title="SIH26034 Compliance API",
     description="Packaged Commodity Legal Metrology Compliance System",
     version="0.2.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5500", "http://localhost:5500"],
+    allow_methods=["POST"],
+    allow_headers=["*"],
 )
 
 
