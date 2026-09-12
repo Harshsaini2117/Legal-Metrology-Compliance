@@ -12,7 +12,81 @@ def check_by_rule(report, rule_id):
     return next(check for check in report["checks"] if check["rule_id"] == rule_id)
 
 
+def compliant_declarations():
+    return {
+        "product_name": "Herbal Tea",
+        "manufacturer": "NatureFresh Foods Pvt. Ltd.",
+        "manufacturer_address": "New Delhi",
+        "is_imported": True,
+        "country_of_origin": "India",
+        "net_quantity": "100 g",
+        "mrp": "299.00",
+        "mrp_inclusive_of_taxes": True,
+        "month_year": "06/2025",
+        "consumer_care": "1800-000-0000",
+        "unit_sale_price_applicable": False,
+        "size_relevant": False,
+    }
+
+
 class RulesEngineTests(unittest.TestCase):
+    def assert_missing_declaration_is_unable_to_verify(self, declarations, rule_id):
+        report = evaluate_compliance(declarations)
+        check = check_by_rule(report, rule_id)
+
+        self.assertEqual(check["status"], STATUS_NOT_APPLICABLE)
+        self.assertEqual(check["verification_status"], "UNABLE_TO_VERIFY")
+        self.assertNotIn(rule_id, {violation["rule_id"] for violation in report["violations"]})
+
+    def test_missing_product_name_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("product_name")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-01")
+
+    def test_missing_manufacturer_packer_importer_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("manufacturer")
+        declarations.pop("manufacturer_address")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-02")
+
+    def test_missing_country_of_origin_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("country_of_origin")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-03")
+
+    def test_missing_net_quantity_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("net_quantity")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-04")
+
+    def test_missing_mrp_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("mrp")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-05")
+
+    def test_missing_tax_inclusive_mrp_wording_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("mrp_inclusive_of_taxes")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-06")
+
+    def test_missing_month_year_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("month_year")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-07")
+
+    def test_missing_consumer_care_is_unable_to_verify_not_a_violation(self):
+        declarations = compliant_declarations()
+        declarations.pop("consumer_care")
+
+        self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-08")
+
     def test_reports_compliant_when_all_applicable_declarations_are_valid(self):
         report = evaluate_compliance(
             {
