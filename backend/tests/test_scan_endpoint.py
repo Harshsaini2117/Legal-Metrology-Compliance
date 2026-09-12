@@ -70,6 +70,15 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
                 }
             ],
             "extracted_fields": {"net_quantity": "500 g"},
+            "field_evidence": {
+                "net_quantity": [
+                    {
+                        "source_ocr_text": "NET QUANTITY 500 g",
+                        "confidence": 0.99,
+                        "bounding_box": [[1, 2], [3, 4]],
+                    }
+                ]
+            },
             "compliance_report": {
                 "overall_status": "UNABLE_TO_VERIFY",
                 "compliance_score": 50,
@@ -110,6 +119,7 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response["processed_image"], scan_result["processed_image"])
             self.assertEqual(response["ocr_results"], scan_result["ocr_results"])
             self.assertEqual(response["extracted_fields"], scan_result["extracted_fields"])
+            self.assertEqual(response["field_evidence"], scan_result["field_evidence"])
             self.assertEqual(response["compliance_report"], scan_result["compliance_report"])
             self.assertEqual(response["evidence_image_path"], scan_result["evidence_image_path"])
             self.assertEqual(response["processing_status"], scan_result["processing_status"])

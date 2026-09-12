@@ -1,6 +1,6 @@
 import unittest
 
-from backend.app.services.field_extractor import FIELD_NAMES, extract_fields
+from backend.app.services.field_extractor import FIELD_NAMES, extract_fields, map_field_evidence
 
 
 class FieldExtractorTests(unittest.TestCase):
@@ -122,6 +122,55 @@ class FieldExtractorTests(unittest.TestCase):
 
     def test_ignores_malformed_ocr_entries(self):
         self.assertEqual(extract_fields([{}, {"text": None}, "not an OCR result"]), {field: None for field in FIELD_NAMES})
+
+    def test_maps_only_textually_supported_field_evidence(self):
+        ocr_results = [
+            {
+                "text": "M.R.P.: Rs. 299/- (Inclusive of all taxes)",
+                "confidence": 0.97,
+                "bounding_box": [[1, 2], [30, 2], [30, 8], [1, 8]],
+            },
+            {
+                "text": "Imported by: Example Imports Pvt. Ltd.",
+                "confidence": 0.95,
+                "bounding_box": [[1, 10], [50, 10], [50, 16], [1, 16]],
+            },
+            {
+                "text": "Unit 2, Mumbai - 400001",
+                "confidence": 0.94,
+                "bounding_box": None,
+            },
+        ]
+        fields = {
+            "mrp": "299",
+            "mrp_inclusive_of_taxes": "Inclusive of all taxes",
+            "importer": "Example Imports Pvt. Ltd.",
+            "importer_address": "Unit 2, Mumbai - 400001",
+            "product_name": "Not present in OCR",
+        }
+
+        evidence = map_field_evidence(ocr_results, fields)
+
+        self.assertEqual(
+            evidence["mrp"],
+            [{
+                "source_ocr_text": ocr_results[0]["text"],
+                "confidence": 0.97,
+                "bounding_box": [[1, 2], [30, 2], [30, 8], [1, 8]],
+            }],
+        )
+        self.assertEqual(evidence["mrp_inclusive_of_taxes"], evidence["mrp"])
+        self.assertEqual(evidence["importer"], [{
+            "source_ocr_text": ocr_results[1]["text"],
+            "confidence": 0.95,
+            "bounding_box": [[1, 10], [50, 10], [50, 16], [1, 16]],
+        }])
+        self.assertEqual(evidence["importer_address"], [{
+            "source_ocr_text": ocr_results[2]["text"],
+            "confidence": 0.94,
+            "bounding_box": None,
+        }])
+        self.assertEqual(evidence["product_name"], [])
 
 
 if __name__ == "__main__":

@@ -3,11 +3,12 @@
 from pathlib import Path
 from typing import Any, Union
 
-from .field_extractor import extract_fields
+from .field_extractor import extract_fields, map_field_evidence
 from .evidence_renderer import render_evidence_image
 from .ocr import extract_text
 from .preprocessing import preprocess_image
 from .rules_engine import evaluate_compliance
+from .scan_response import attach_evidence_to_checks
 
 
 PathLike = Union[str, Path]
@@ -58,6 +59,7 @@ def process_scan(
 
     try:
         extracted_fields = extract_fields(ocr_results)
+        field_evidence = map_field_evidence(ocr_results, extracted_fields)
     except Exception as exc:
         raise ScanProcessingError("field_extraction", str(exc)) from exc
 
@@ -77,11 +79,14 @@ def process_scan(
     except Exception as exc:
         raise ScanProcessingError("evidence_rendering", str(exc)) from exc
 
+    compliance_report = attach_evidence_to_checks(compliance_report, field_evidence)
+
     return {
         "input_image": str(source),
         "processed_image": str(processed_image),
         "ocr_results": ocr_results,
         "extracted_fields": extracted_fields,
+        "field_evidence": field_evidence,
         "compliance_report": compliance_report,
         "evidence_image_path": str(evidence_image),
         "processing_status": "COMPLETED",

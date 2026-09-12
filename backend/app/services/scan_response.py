@@ -48,6 +48,44 @@ def normalize_evidence(ocr_results: Any, extracted_fields: Any, compliance_repor
     return evidence
 
 
+def attach_evidence_to_checks(
+    compliance_report: Any, field_evidence: Any
+) -> dict[str, Any]:
+    """Add available field OCR evidence to compliance checks without re-evaluating rules."""
+    report = dict(compliance_report) if isinstance(compliance_report, Mapping) else {}
+    evidence_by_field = field_evidence if isinstance(field_evidence, Mapping) else {}
+    checks = []
+
+    for check in _mappings(report.get("checks")):
+        enriched_check = dict(check)
+        evidence = _check_evidence(enriched_check.get("field"), evidence_by_field)
+        if evidence:
+            enriched_check["ocr_evidence"] = evidence
+        checks.append(enriched_check)
+
+    report["checks"] = checks
+    return report
+
+
+def _check_evidence(field: Any, evidence_by_field: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if field == "manufacturer_or_packer_or_importer":
+        fields = (
+            "manufacturer", "manufacturer_address", "packer", "packer_address",
+            "importer", "importer_address",
+        )
+    elif isinstance(field, str):
+        fields = (field,)
+    else:
+        return []
+
+    evidence: list[dict[str, Any]] = []
+    for field_name in fields:
+        entries = evidence_by_field.get(field_name)
+        if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
+            evidence.extend(entry for entry in entries if isinstance(entry, Mapping))
+    return evidence
+
+
 def _related_field(detected_text: str, fields: Mapping[str, Any]) -> str | None:
     normalized_text = detected_text.casefold()
     matches = [

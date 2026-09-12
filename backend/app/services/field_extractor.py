@@ -128,6 +128,38 @@ def extract_fields(ocr_results: Iterable[Mapping[str, Any]] | None) -> dict[str,
     return fields
 
 
+def map_field_evidence(
+    ocr_results: Iterable[Mapping[str, Any]] | None,
+    extracted_fields: Mapping[str, Any] | None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the OCR detections that deterministically support each field.
+
+    Extraction intentionally normalizes OCR text (for example, ``GMS`` to
+    ``g`` and date separators). This mapper links a value only when the
+    normalized value and the detected text still have a direct textual match.
+    It returns an empty list when no such link exists rather than inferring a
+    location from nearby OCR detections.
+    """
+    fields = extracted_fields if isinstance(extracted_fields, Mapping) else {}
+    detections = _ocr_detections(ocr_results)
+    evidence: dict[str, list[dict[str, Any]]] = {field: [] for field in FIELD_NAMES}
+
+    for field in FIELD_NAMES:
+        value = fields.get(field)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        for detection in detections:
+            if _evidence_matches(field, value, detection["text"]):
+                evidence[field].append(
+                    {
+                        "source_ocr_text": detection["text"],
+                        "confidence": detection.get("confidence"),
+                        "bounding_box": detection.get("bounding_box"),
+                    }
+                )
+    return evidence
+
+
 def _extract_consumer_care(lines: list[str]) -> str | None:
     for index, line in enumerate(lines):
         match = _CONSUMER_CARE_PATTERN.match(line)
@@ -173,6 +205,42 @@ def _ocr_lines(ocr_results: Iterable[Mapping[str, Any]] | None) -> list[str]:
             if normalized:
                 lines.append(normalized)
     return lines
+
+
+def _ocr_detections(ocr_results: Iterable[Mapping[str, Any]] | None) -> list[Mapping[str, Any]]:
+    if not ocr_results:
+        return []
+    return [
+        result
+        for result in ocr_results
+        if isinstance(result, Mapping) and isinstance(result.get("text"), str) and result["text"].strip()
+    ]
+
+
+def _evidence_matches(field: str, value: str, detected_text: str) -> bool:
+    """Require a textual value match, with narrow safeguards for MRP."""
+    normalized_value = _match_text(value)
+    normalized_detection = _match_text(detected_text)
+    if not normalized_value or not normalized_detection:
+        return False
+
+    if field == "mrp" and not _MRP_PATTERN.search(detected_text):
+        return False
+
+    # A detected line can contain the label and value, or a multi-line field
+    # (such as an address) can contain the detected line as one of its parts.
+    return normalized_value in normalized_detection or (
+        len(normalized_detection) >= 4 and normalized_detection in normalized_value
+    )
+
+
+def _match_text(value: str) -> str:
+    """Normalize only OCR/extraction presentation differences for matching."""
+    normalized = value.casefold()
+    normalized = re.sub(r"\b(?:gms?|grams?)\b", "g", normalized)
+    normalized = re.sub(r"\b(?:kgs?)\b", "kg", normalized)
+    normalized = re.sub(r"\b(?:litres?|liters?)\b", "l", normalized)
+    return re.sub(r"[^a-z0-9]+", "", normalized)
 
 
 def _extract_entity(lines: list[str], pattern: re.Pattern[str]) -> tuple[str | None, str | None]:

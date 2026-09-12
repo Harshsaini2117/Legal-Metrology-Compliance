@@ -17,7 +17,12 @@ class ScanServiceTests(unittest.TestCase):
             }
         ]
         fields = {"product_name": None, "net_quantity": "500 g", "mrp": None}
-        report = {"overall_status": "UNABLE_TO_VERIFY", "compliance_score": None, "checks": [], "violations": []}
+        report = {
+            "overall_status": "UNABLE_TO_VERIFY",
+            "compliance_score": None,
+            "checks": [{"rule_id": "LMPC-R6-04", "field": "net_quantity"}],
+            "violations": [],
+        }
         evidence_image = Path("data/evidence/product_evidence.png")
 
         with (
@@ -40,7 +45,18 @@ class ScanServiceTests(unittest.TestCase):
         self.assertEqual(result["processed_image"], str(processed_image))
         self.assertEqual(result["ocr_results"], ocr_results)
         self.assertEqual(result["extracted_fields"], fields)
-        self.assertEqual(result["compliance_report"], report)
+        self.assertEqual(
+            result["field_evidence"]["net_quantity"],
+            [{
+                "source_ocr_text": "NET QUANTITY 500 g",
+                "confidence": 0.98,
+                "bounding_box": [[10, 20], [200, 20], [200, 50], [10, 50]],
+            }],
+        )
+        self.assertEqual(
+            result["compliance_report"]["checks"][0]["ocr_evidence"],
+            result["field_evidence"]["net_quantity"],
+        )
         self.assertEqual(result["evidence_image_path"], str(evidence_image))
         self.assertEqual(result["processing_status"], "COMPLETED")
 
