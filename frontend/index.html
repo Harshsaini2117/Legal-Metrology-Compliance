@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="SIH26034 Legal Metrology Compliance Scanner"
+    />
+    <title>LabelLens | Legal Metrology Compliance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="topbar" aria-label="Primary navigation">
+        <a class="brand" href="#top" aria-label="LabelLens home">
+          <span class="brand-mark" aria-hidden="true">L</span>
+          <span>Label<span>Lens</span></span>
+        </a>
+        <span class="nav-label">Legal Metrology Intelligence</span>
+        <a class="nav-chip" href="#scanner">New scan <span aria-hidden="true">↗</span></a>
+      </nav>
+
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="pulse"></span> AI-assisted label review</p>
+          <h1>Make every package <em>inspection-ready.</em></h1>
+          <p class="lede">
+            Upload a retail label to surface mandatory declarations, compliance signals,
+            and a downloadable review report in one clear view.
+          </p>
+          <div class="hero-points" aria-label="Product capabilities">
+            <span>OCR-backed evidence</span><span>Rule-based assessment</span><span>PDF report</span>
+          </div>
+        </div>
+        <div class="hero-orbit" aria-hidden="true">
+          <div class="orbit-card orbit-card-top"><b>10</b><span>checks reviewed</span></div>
+          <div class="orbit-core"><span>✓</span><small>SCAN</small></div>
+          <div class="orbit-card orbit-card-bottom"><i></i><span>evidence linked</span></div>
+        </div>
+      </section>
+
+      <section class="scanner-section" id="scanner" aria-labelledby="scanner-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / Scan a product</p>
+            <h2 id="scanner-title">Upload the package label</h2>
+          </div>
+          <p>JPG, PNG, or WEBP · maximum 10 MB</p>
+        </div>
+
+        <div class="upload-layout">
+          <label class="dropzone" id="dropzone" for="image-input">
+            <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+            <span class="upload-icon" aria-hidden="true">↑</span>
+            <strong>Drop a label image here</strong>
+            <span>or browse from your device</span>
+          </label>
+          <div class="preview-panel" id="preview-panel">
+            <div class="preview-empty" id="preview-empty">
+              <span aria-hidden="true">▧</span>
+              <p>Your label preview will appear here</p>
+            </div>
+            <img id="image-preview" alt="Selected product label preview" hidden />
+            <div class="preview-meta" id="preview-meta" hidden>
+              <span id="file-name"></span>
+              <button class="text-button" id="clear-file" type="button">Remove</button>
+            </div>
+          </div>
+        </div>
+        <div class="scan-actions">
+          <p class="form-message" id="form-message" role="status" aria-live="polite">Select a package image to begin.</p>
+          <button class="scan-button" id="scan-button" type="button" disabled>
+            <span class="button-label">Scan product</span><span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="processing" id="processing" hidden aria-live="polite">
+        <div class="processing-spinner" aria-hidden="true"></div>
+        <div><p class="eyebrow">Processing label</p><h2>Reading declarations and applying checks…</h2></div>
+      </section>
+
+      <section class="results" id="results" hidden aria-live="polite">
+        <div class="results-head">
+          <div>
+            <p class="eyebrow">02 / Assessment complete</p>
+            <h2>Compliance result</h2>
+            <p id="result-file"></p>
+          </div>
+          <a class="report-button" id="report-download" href="#" hidden>
+            Download PDF Report <span aria-hidden="true">↓</span>
+          </a>
+        </div>
+
+        <div class="status-banner" id="status-banner">
+          <div class="status-icon" id="status-icon">✓</div>
+          <div><p id="status-kicker">Overall status</p><h3 id="overall-status">—</h3><span id="status-description"></span></div>
+          <div class="score"><strong id="compliance-score">—</strong><span>compliance score</span></div>
+        </div>
+
+        <div class="metrics" id="metrics"></div>
+
+        <div class="result-grid">
+          <article class="result-card fields-card">
+            <div class="card-head"><div><p class="eyebrow">Detected label data</p><h3>Extracted fields</h3></div><span class="card-dot"></span></div>
+            <dl class="fields-list" id="fields-list"></dl>
+          </article>
+          <article class="result-card checks-card">
+            <div class="card-head"><div><p class="eyebrow">Rule evaluation</p><h3>Review checks</h3></div></div>
+            <div class="checks-list" id="checks-list"></div>
+          </article>
+        </div>
+
+        <article class="result-card violations-card" id="violations-card">
+          <div class="card-head"><div><p class="eyebrow">Requires attention</p><h3>Violations</h3></div><span id="violation-count"></span></div>
+          <div id="violations-list"></div>
+        </article>
+
+        <article class="result-card evidence-card">
+          <div class="card-head"><div><p class="eyebrow">Traceable output</p><h3>OCR evidence</h3></div><span class="evidence-tag">DETECTIONS</span></div>
+          <p class="evidence-intro">Detected text is retained below so each assessment can be traced back to label evidence.</p>
+          <div class="evidence-list" id="evidence-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <footer><span>SIH26034 · Packaged Commodity Compliance</span><span>Built for faster, explainable reviews</span></footer>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -33,6 +33,14 @@ _NET_QUANTITY_PATTERN = re.compile(
 )
 _MRP_PATTERN = re.compile(r"^\d+(?:\.\d{1,2})?$")
 _UNIT_SALE_PRICE_PATTERN = re.compile(r"(?:₹|rs\.?|inr)?\s*\d+(?:\.\d{1,2})?", re.IGNORECASE)
+_MEASURED_QUANTITY_PATTERN = re.compile(
+    r"^\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|cl|m|cm|mm|m2|cm2)\b",
+    re.IGNORECASE,
+)
+_COUNT_QUANTITY_PATTERN = re.compile(
+    r"^\d+(?:\.\d+)?\s*(?:pcs?|pieces?|nos?|units?|pairs?)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -165,12 +173,34 @@ def _check_consumer_care(data: Mapping[str, Any], rule: RuleDefinition) -> dict[
 
 
 def _check_unit_sale_price(data: Mapping[str, Any], rule: RuleDefinition) -> dict[str, str]:
-    applicable = data.get("unit_sale_price_applicable")
+    applicable = _unit_sale_price_applicability(data)
     if applicable is False:
-        return _not_applicable(rule, "Unit sale price is marked not applicable by upstream product context.")
+        return _not_applicable(rule, "Unit sale price is not applicable to the normalized quantity context.")
     if applicable is not True:
         return _unable(rule, "Unit-sale-price applicability is not available in the normalized fields.")
-    return _presence_check(data.get("unit_sale_price"), rule, "Unit sale price", _valid_unit_sale_price, conditional=True)
+    value = data.get("unit_sale_price")
+    if not _has_value(value):
+        return _fail(rule, "Unit sale price is required for the normalized quantity context but was not detected.")
+    if not _valid_unit_sale_price(value):
+        return _fail(rule, "Detected unit sale price has an invalid format.")
+    return _pass(rule, "Unit sale price was detected with a usable format.")
+
+
+def _unit_sale_price_applicability(data: Mapping[str, Any]) -> bool | None:
+    explicit_applicability = data.get("unit_sale_price_applicable")
+    if isinstance(explicit_applicability, bool):
+        return explicit_applicability
+    if _has_value(data.get("unit_sale_price")):
+        return True
+
+    net_quantity = data.get("net_quantity")
+    if not isinstance(net_quantity, str):
+        return None
+    if _COUNT_QUANTITY_PATTERN.fullmatch(net_quantity.strip()):
+        return False
+    if _MEASURED_QUANTITY_PATTERN.fullmatch(net_quantity.strip()):
+        return True
+    return None
 
 
 def _check_size(data: Mapping[str, Any], rule: RuleDefinition) -> dict[str, str]:

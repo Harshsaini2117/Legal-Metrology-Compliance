@@ -87,6 +87,49 @@ class RulesEngineTests(unittest.TestCase):
 
         self.assert_missing_declaration_is_unable_to_verify(declarations, "LMPC-R6-08")
 
+    def test_unit_sale_price_is_not_applicable_for_count_quantity(self):
+        declarations = compliant_declarations()
+        declarations.pop("unit_sale_price_applicable")
+        declarations["net_quantity"] = "1 Pair"
+
+        report = evaluate_compliance(declarations)
+        check = check_by_rule(report, "LMPC-R6-09")
+
+        self.assertEqual(check["status"], STATUS_NOT_APPLICABLE)
+        self.assertEqual(check["verification_status"], "NOT_APPLICABLE")
+        self.assertEqual(report["compliance_score"], 100)
+        self.assertEqual(report["overall_status"], "COMPLIANT")
+
+    def test_unit_sale_price_passes_when_measured_quantity_has_a_declaration(self):
+        declarations = compliant_declarations()
+        declarations.pop("unit_sale_price_applicable")
+        declarations["unit_sale_price"] = "Rs. 299.00/kg"
+
+        report = evaluate_compliance(declarations)
+
+        self.assertEqual(check_by_rule(report, "LMPC-R6-09")["status"], STATUS_PASS)
+
+    def test_unit_sale_price_fails_when_measured_quantity_is_missing_a_declaration(self):
+        declarations = compliant_declarations()
+        declarations.pop("unit_sale_price_applicable")
+
+        report = evaluate_compliance(declarations)
+
+        self.assertEqual(check_by_rule(report, "LMPC-R6-09")["status"], STATUS_FAIL)
+        self.assertIn("LMPC-R6-09", {violation["rule_id"] for violation in report["violations"]})
+        self.assertEqual(report["overall_status"], "NON_COMPLIANT")
+
+    def test_unit_sale_price_is_unable_to_verify_without_quantity_or_context(self):
+        declarations = compliant_declarations()
+        declarations.pop("unit_sale_price_applicable")
+        declarations.pop("net_quantity")
+
+        report = evaluate_compliance(declarations)
+        check = check_by_rule(report, "LMPC-R6-09")
+
+        self.assertEqual(check["status"], STATUS_NOT_APPLICABLE)
+        self.assertEqual(check["verification_status"], "UNABLE_TO_VERIFY")
+
     def test_reports_compliant_when_all_applicable_declarations_are_valid(self):
         report = evaluate_compliance(
             {
