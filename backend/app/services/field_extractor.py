@@ -23,7 +23,7 @@ FIELD_NAMES = (
 )
 
 _MRP_PATTERN = re.compile(
-    r"\bM\s*\.?\s*R\s*\.?\s*P\s*\.?[^\d\n]{0,40}"
+    r"\bM\s*\.?\s*R\s*\.?\s*P\s*\.?\s*[:\-]?\s*"
     r"(?:₹|Rs\.?|INR)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)",
     re.IGNORECASE,
 )
@@ -31,17 +31,24 @@ _MRP_TAX_INCLUSION_PATTERN = re.compile(
     r"\b(inclusive\s+of\s+(?:all\s+)?tax(?:es)?|incl\.?\s*(?:of\s+)?(?:all\s+)?tax(?:es)?)\b",
     re.IGNORECASE,
 )
-_NET_QUANTITY_PATTERN = re.compile(
-    r"\bNET\s*(?:QUANTITY|QTY|CONTENTS)\s*[:\-]?\s*(?:[^\n]*?\(\s*)?"
-    r"([0-9]+(?:\.\d+)?\s*(?:kgs?|kg|gms?|grams?|g|ml|litres?|liters?|l|"
-    r"pcs?|pieces?|nos?|units?|pairs?)(?:\s*[xX]\s*[0-9]+(?:\.\d+)?\s*"
+_NET_QUANTITY_LABEL_PATTERN = re.compile(
+    r"\b(?:net\s*(?:quantity|qty|contents)|contents)\b\s*[:\-]?\s*(.*)$",
+    re.IGNORECASE,
+)
+_NET_QUANTITY_VALUE_PATTERN = re.compile(
+    r"(\d+(?:\.\d+)?\s*N\s*\(\s*\d+(?:\.\d+)?\s*"
+    r"(?:pairs?|pcs?|pieces?|nos?|units?)\s*\)|"
+    r"\d+(?:\.\d+)?\s*(?:kgs?|kg|gms?|grams?|g|ml|litres?|liters?|l|"
+    r"pcs?|pieces?|nos?|units?|pairs?)(?:\s*[xX]\s*\d+(?:\.\d+)?\s*"
     r"(?:kg|g|ml|l|pcs?|nos?|pairs?))?)",
     re.IGNORECASE,
 )
 _MONTH_YEAR_PATTERN = re.compile(
     r"(?:month\s*(?:&|and)\s*year(?:\s+of\s+(?:import|manufacture|packing))?|"
-    r"mfg\.?|mfd\.?|manufactured\s+on|packed\s+on)\s*(?:[:\-]\s*)*"
-    r"([A-Za-z]{3,9}\.?\s*[-/,]?\s*\d{2,4}|\d{1,2}\s*[-/]\s*\d{2,4})",
+    r"mfg\.?(?:\s*date)?|mfd\.?(?:\s*date)?|manufactured\s+on|packed\s+on|date\s+of\s+"
+    r"(?:manufacture|packing|import)|best[\s-]*(?:before|by)|use[\s-]*by|"
+    r"expiry|exp\.?)\s*(?:[:\-.]\s*)*"
+    r"([A-Za-z]{3,9}\.?\s*[-/,.]?\s*\d{2,4}|\d{1,2}\s*[-/.\s]\s*\d{2,4})",
     re.IGNORECASE,
 )
 _COUNTRY_PATTERN = re.compile(
@@ -66,15 +73,20 @@ _INDIAN_CONTACT_PATTERN = re.compile(
 
 _ENTITY_PATTERNS = {
     "manufacturer": re.compile(
-        r"^\s*(?:manufactured(?:\s*&\s*marketed)?\s+by|manufacturer)\s*[:\-]?\s*(.*)$",
+        r"^\s*(?:manufactured(?:\s*(?:&|and)\s*marketed)?\s+by|"
+        r"manufacture[dr]?\s+by|m(?:fg|fd|fr)\.?\s+by|"
+        r"manufacturer(?:\s+(?:name|details))?)\s*[:\-]?\s*(.*)$",
         re.IGNORECASE,
     ),
     "importer": re.compile(
-        r"^\s*(?:imported(?:\s*&\s*marketed)?\s+by|importer)\s*[:\-]?\s*(.*)$",
+        r"^\s*(?:imported(?:\s*(?:&|and)\s*marketed)?\s+by|"
+        r"import(?:\s*(?:&|and)\s*marketed)?\s+by|"
+        r"importer(?:\s+(?:name|details))?)\s*[:\-]?\s*(.*)$",
         re.IGNORECASE,
     ),
     "packer": re.compile(
-        r"^\s*(?:packed\s+by|packer)\s*[:\-]?\s*(.*)$",
+        r"^\s*(?:packed(?:\s*(?:&|and)\s*marketed)?\s+by|"
+        r"pack(?:er|ing)\s+by|packer(?:\s+(?:name|details))?)\s*[:\-]?\s*(.*)$",
         re.IGNORECASE,
     ),
 }
@@ -84,10 +96,11 @@ _DIRECT_ADDRESS_PATTERNS = {
     "packer_address": re.compile(r"^\s*packer(?:'s)?\s+address\s*[:\-]?\s*(.*)$", re.IGNORECASE),
 }
 _LABEL_TERMS = re.compile(
-    r"\b(?:m\s*\.?\s*r\s*\.?\s*p\s*\.?|net\s*(?:quantity|qty|contents)|"
-    r"manufactured|manufacturer|imported|importer|packed\s+by|packer|"
+    r"\b(?:m\s*\.?\s*r\s*\.?\s*p\s*\.?|net\s*(?:quantity|qty|contents)|contents|"
+    r"manufactured|manufacturer|mfg\.?|mfd\.?|imported|importer|packed\s+by|packer|"
     r"month\s*(?:&|and)\s*year|mfg\.?|mfd\.?|country\s+of\s+origin|"
-    r"made\s+in|product\s+of|size|product(?:\s*name)?|(?:consumer|customer)\s*"
+    r"best[\s-]*(?:before|by)|use[\s-]*by|expiry|made\s+in|product\s+of|size|"
+    r"product(?:\s*name)?|(?:consumer|customer)\b\s*"
     r"(?:care|complaints?|queries?|service))\b",
     re.IGNORECASE,
 )
@@ -109,7 +122,7 @@ def extract_fields(ocr_results: Iterable[Mapping[str, Any]] | None) -> dict[str,
     fields["mrp_inclusive_of_taxes"] = _normalize_value(
         _first_group(_MRP_TAX_INCLUSION_PATTERN, text)
     )
-    fields["net_quantity"] = _normalize_quantity(_first_group(_NET_QUANTITY_PATTERN, text))
+    fields["net_quantity"] = _extract_net_quantity(lines)
     fields["month_year"] = _normalize_month_year(_first_group(_MONTH_YEAR_PATTERN, text))
     fields["country_of_origin"] = _normalize_value(_first_group(_COUNTRY_PATTERN, text))
     fields["size"] = _normalize_value(_first_group(_SIZE_PATTERN, text))
@@ -168,17 +181,29 @@ def _extract_consumer_care(lines: list[str]) -> str | None:
 
         section = [_normalize_value(match.group(1))]
         for following_line in lines[index + 1 :]:
-            if any(pattern.match(following_line) for pattern in _ENTITY_PATTERNS.values()) or any(
-                pattern.match(following_line) for pattern in _DIRECT_ADDRESS_PATTERNS.values()
-            ):
+            if _is_label_line(following_line):
                 break
             section.append(following_line)
-        phone_number = _first_phone_number(section)
-        if phone_number:
-            return phone_number
         return _normalize_value(" ".join(value for value in section if value))
 
     return _first_phone_number(lines)
+
+
+def _extract_net_quantity(lines: list[str]) -> str | None:
+    """Extract a quantity from a declaration line, retaining count context."""
+    for index, line in enumerate(lines):
+        match = _NET_QUANTITY_LABEL_PATTERN.search(line)
+        if not match:
+            continue
+
+        candidates = [match.group(1)]
+        if not match.group(1) and index + 1 < len(lines):
+            candidates.append(lines[index + 1])
+        for candidate in candidates:
+            quantity = _first_group(_NET_QUANTITY_VALUE_PATTERN, candidate)
+            if quantity:
+                return _normalize_quantity(quantity)
+    return None
 
 
 def _first_phone_number(values: Iterable[str | None]) -> str | None:
@@ -313,7 +338,8 @@ def _normalize_month_year(value: str | None) -> str | None:
     if not value:
         return None
 
-    numeric = re.fullmatch(r"(\d{1,2})\s*[-/]\s*(\d{2,4})", value)
+    value = re.sub(r"(?<=[A-Za-z]),\s*", " ", value)
+    numeric = re.fullmatch(r"(\d{1,2})\s*[-/.\s]\s*(\d{2,4})", value)
     if numeric:
         return f"{numeric.group(1).zfill(2)}/{numeric.group(2)}"
     return value.title()

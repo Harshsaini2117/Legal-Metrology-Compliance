@@ -72,7 +72,7 @@ class FieldExtractorTests(unittest.TestCase):
         self.assertEqual(fields["product_name"], "WO4-FR-CCP-KARMEN")
         self.assertEqual(fields["mrp"], "899")
         self.assertEqual(fields["mrp_inclusive_of_taxes"], "inclusive of all taxes")
-        self.assertEqual(fields["net_quantity"], "1 Pair")
+        self.assertEqual(fields["net_quantity"], "2 N (1 Pair)")
         self.assertEqual(fields["manufacturer"], "Payless India Franchising, LLC")
         self.assertEqual(fields["manufacturer_address"], "Topeka, USA 66607")
         self.assertEqual(fields["importer"], "Reliance Clothing India Pvt. Ltd.")
@@ -83,7 +83,7 @@ class FieldExtractorTests(unittest.TestCase):
         self.assertEqual(fields["month_year"], "07/2018")
         self.assertEqual(
             fields["consumer_care"],
-            "1800 891 2646",
+            "Toll Free No. 1800 891 2646 Email: customercare@reliancebrands.com",
         )
 
     def test_extracts_consumer_care_from_noisy_ocr_phone_evidence(self):
@@ -108,7 +108,10 @@ class FieldExtractorTests(unittest.TestCase):
             [{"text": "Consumer care desk: please call +91 22 6727 6727 for assistance"}]
         )
 
-        self.assertEqual(fields["consumer_care"], "+91 22 6727 6727")
+        self.assertEqual(
+            fields["consumer_care"],
+            "desk: please call +91 22 6727 6727 for assistance",
+        )
 
     def test_extracts_parenthesized_pair_as_net_quantity(self):
         fields = extract_fields(
@@ -118,7 +121,91 @@ class FieldExtractorTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(fields["net_quantity"], "1 Pair")
+        self.assertEqual(fields["net_quantity"], "2 N (1 Pair)")
+
+    def test_extracts_mrp_variants_and_tax_inclusion(self):
+        cases = (
+            ("MRP:899/-", "899", None),
+            ("MRP Rs. 899", "899", None),
+            ("MRP ₹899", "899", None),
+            (
+                "MRP: 899/- (inclusive of all taxes)",
+                "899",
+                "inclusive of all taxes",
+            ),
+        )
+
+        for text, expected_mrp, expected_tax in cases:
+            with self.subTest(text=text):
+                fields = extract_fields([{"text": text}])
+                self.assertEqual(fields["mrp"], expected_mrp)
+                self.assertEqual(fields["mrp_inclusive_of_taxes"], expected_tax)
+
+    def test_extracts_net_quantity_without_losing_count_context(self):
+        cases = (
+            ("Net Contents: 2 N (1 Pair)", "2 N (1 Pair)"),
+            ("Net Qty: 100 g", "100 g"),
+            ("Net Quantity: 500 ml", "500 ml"),
+            ("Contents: 10 pcs", "10 pcs"),
+        )
+
+        for text, expected_quantity in cases:
+            with self.subTest(text=text):
+                self.assertEqual(extract_fields([{"text": text}])["net_quantity"], expected_quantity)
+
+    def test_extracts_common_entity_declaration_variants(self):
+        fields = extract_fields(
+            [
+                {"text": "Mfd. By: Acme Foods Pvt. Ltd."},
+                {"text": "12 Market Road, Pune"},
+                {"text": "Import & Marketed By: Global Trade LLP"},
+                {"text": "Mumbai, Maharashtra"},
+                {"text": "Packed & Marketed By: Acme Packaging"},
+                {"text": "Noida, Uttar Pradesh"},
+            ]
+        )
+
+        self.assertEqual(fields["manufacturer"], "Acme Foods Pvt. Ltd.")
+        self.assertEqual(fields["manufacturer_address"], "12 Market Road, Pune")
+        self.assertEqual(fields["importer"], "Global Trade LLP")
+        self.assertEqual(fields["importer_address"], "Mumbai, Maharashtra")
+        self.assertEqual(fields["packer"], "Acme Packaging")
+        self.assertEqual(fields["packer_address"], "Noida, Uttar Pradesh")
+
+    def test_extracts_country_of_origin_without_a_separator(self):
+        for text in (
+            "Made in Vietnam",
+            "Country of Origin: Vietnam",
+            "Country of Origin Vietnam",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(extract_fields([{"text": text}])["country_of_origin"], "Vietnam")
+
+    def test_extracts_dates_from_manufacture_and_best_before_declarations(self):
+        cases = (
+            ("Mfg. Date: 06 . 2025", "06/2025"),
+            ("Month & Year of Import :: 07 / 2018", "07/2018"),
+            ("Best-Before: 12-2026", "12/2026"),
+            ("Use By : Jan, 2027", "Jan 2027"),
+        )
+
+        for text, expected_date in cases:
+            with self.subTest(text=text):
+                self.assertEqual(extract_fields([{"text": text}])["month_year"], expected_date)
+
+    def test_preserves_consumer_care_phone_email_and_address(self):
+        fields = extract_fields(
+            [
+                {"text": "Consumer Care: Call 1800-891-2646"},
+                {"text": "Email: care@example.com"},
+                {"text": "Acme Foods, 12 Market Road, Pune - 411001"},
+            ]
+        )
+
+        self.assertEqual(
+            fields["consumer_care"],
+            "Call 1800-891-2646 Email: care@example.com Acme Foods, 12 Market Road, Pune - 411001",
+        )
 
     def test_ignores_malformed_ocr_entries(self):
         self.assertEqual(extract_fields([{}, {"text": None}, "not an OCR result"]), {field: None for field in FIELD_NAMES})
