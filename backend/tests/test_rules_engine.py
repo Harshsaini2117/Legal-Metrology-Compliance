@@ -90,7 +90,7 @@ class RulesEngineTests(unittest.TestCase):
     def test_unit_sale_price_is_not_applicable_for_count_quantity(self):
         declarations = compliant_declarations()
         declarations.pop("unit_sale_price_applicable")
-        declarations["net_quantity"] = "1 Pair"
+        declarations["net_quantity"] = "2 N (1 Pair)"
 
         report = evaluate_compliance(declarations)
         check = check_by_rule(report, "LMPC-R6-09")
@@ -99,6 +99,24 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(check["verification_status"], "NOT_APPLICABLE")
         self.assertEqual(report["compliance_score"], 100)
         self.assertEqual(report["overall_status"], "COMPLIANT")
+
+    def test_accepts_recognized_measured_and_count_net_quantity_formats(self):
+        for quantity in ("2 N (1 Pair)", "1 Pair", "100 g"):
+            with self.subTest(quantity=quantity):
+                declarations = compliant_declarations()
+                declarations["net_quantity"] = quantity
+
+                report = evaluate_compliance(declarations)
+
+                self.assertEqual(check_by_rule(report, "LMPC-R6-04")["status"], STATUS_PASS)
+
+    def test_rejects_plain_number_as_invalid_net_quantity(self):
+        declarations = compliant_declarations()
+        declarations["net_quantity"] = "500"
+
+        report = evaluate_compliance(declarations)
+
+        self.assertEqual(check_by_rule(report, "LMPC-R6-04")["status"], STATUS_FAIL)
 
     def test_unit_sale_price_passes_when_measured_quantity_has_a_declaration(self):
         declarations = compliant_declarations()

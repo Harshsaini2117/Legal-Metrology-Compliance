@@ -27,8 +27,13 @@ _MONTH_YEAR_PATTERN = re.compile(
     r"^(?:0[1-9]|1[0-2])/(?:\d{2}|\d{4})$|^[A-Za-z]{3,9}\s+\d{2,4}$"
 )
 _NET_QUANTITY_PATTERN = re.compile(
-    r"^\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|cl|m|cm|mm|m2|cm2|pcs?|pieces?|nos?|units?|pairs?)"
-    r"(?:\s*[xX]\s*\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|pcs?|nos?|pairs?))?$",
+    r"^(?:"
+    r"\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|cl|m|cm|mm|m2|cm2)"
+    r"(?:\s*[xX]\s*\d+(?:\.\d+)?\s*(?:kg|g|mg|l|ml|pcs?|nos?|pairs?))?"
+    r"|\d+(?:\.\d+)?\s*(?:pcs?|pieces?|nos?|units?|pairs?)"
+    r"|\d+(?:\.\d+)?\s*N(?:\s*\(\s*\d+(?:\.\d+)?\s*"
+    r"(?:pcs?|pieces?|nos?|units?|pairs?)\s*\))?"
+    r")$",
     re.IGNORECASE,
 )
 _MRP_PATTERN = re.compile(r"^\d+(?:\.\d{1,2})?$")
@@ -38,7 +43,9 @@ _MEASURED_QUANTITY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _COUNT_QUANTITY_PATTERN = re.compile(
-    r"^\d+(?:\.\d+)?\s*(?:pcs?|pieces?|nos?|units?|pairs?)\b",
+    r"^(?:\d+(?:\.\d+)?\s*(?:pcs?|pieces?|nos?|units?|pairs?)|"
+    r"\d+(?:\.\d+)?\s*N(?:\s*\(\s*\d+(?:\.\d+)?\s*"
+    r"(?:pcs?|pieces?|nos?|units?|pairs?)\s*\))?)$",
     re.IGNORECASE,
 )
 
