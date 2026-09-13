@@ -37,3 +37,10 @@ data/scans.db
 # Secrets
 *.key
 *.pem
+
+# Local/runtime artifacts
+backend/.venv312/
+data/
+runtime/
+tmp/
+tmp_*.txt
