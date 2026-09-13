@@ -20,6 +20,10 @@ class ReportGeneratorTests(unittest.TestCase):
             "compliance_report": {
                 "overall_status": "NON_COMPLIANT",
                 "compliance_score": 75,
+                "verified_compliance_score": 50,
+                "evidence_coverage": 75,
+                "unable_to_verify_checks": 1,
+                "review_required": True,
                 "checks": [
                     {"rule_id": "LMPC-R6-04", "field": "net_quantity", "status": "PASS", "message": "Net quantity was detected."},
                     {"rule_id": "LMPC-R6-05", "field": "mrp", "status": "FAIL", "message": "Detected MRP has an invalid format."},
@@ -44,6 +48,9 @@ class ReportGeneratorTests(unittest.TestCase):
         for expected in (
             b"SIH26034 Legal Metrology Compliance Report",
             b"NON_COMPLIANT",
+            b"Verified Compliance",
+            b"Evidence Coverage",
+            b"Review Required",
             b"Instant Coffee",
             b"NOT_APPLICABLE",
             b"UNABLE_TO_VERIFY",

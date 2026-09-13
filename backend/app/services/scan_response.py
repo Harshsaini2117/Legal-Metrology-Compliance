@@ -4,20 +4,38 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
-def build_summary(compliance_report: Any) -> dict[str, int | str | None]:
+def build_summary(compliance_report: Any) -> dict[str, int | str | bool | None]:
     """Summarize existing rule results without changing their decisions."""
     report = compliance_report if isinstance(compliance_report, Mapping) else {}
     checks = _mappings(report.get("checks"))
     violations = _mappings(report.get("violations"))
+    unable_to_verify_checks = sum(
+        check.get("verification_status") == "UNABLE_TO_VERIFY" for check in checks
+    )
+    verified_checks = [
+        check
+        for check in checks
+        if check.get("verification_status", "VERIFIED") == "VERIFIED"
+    ]
+    total_applicable_checks = len(verified_checks) + unable_to_verify_checks
+    passed_checks = sum(check.get("status") == "PASS" for check in verified_checks)
+    failed_checks = sum(check.get("status") == "FAIL" for check in verified_checks)
+    verified_compliance_score = report.get("verified_compliance_score", report.get("compliance_score"))
+    evidence_coverage = report.get("evidence_coverage")
+    if evidence_coverage is None and total_applicable_checks:
+        evidence_coverage = round((len(verified_checks) / total_applicable_checks) * 100)
+
     return {
         "overall_status": report.get("overall_status"),
         "compliance_score": report.get("compliance_score"),
+        "verified_compliance_score": verified_compliance_score,
+        "evidence_coverage": evidence_coverage,
         "total_checks": len(checks),
-        "passed_checks": sum(check.get("status") == "PASS" for check in checks),
-        "failed_checks": sum(check.get("status") == "FAIL" for check in checks),
-        "unable_to_verify_checks": sum(
-            check.get("verification_status") == "UNABLE_TO_VERIFY" for check in checks
-        ),
+        "passed_checks": report.get("passed_checks", passed_checks),
+        "failed_checks": report.get("failed_checks", failed_checks),
+        "unable_to_verify_checks": report.get("unable_to_verify_checks", unable_to_verify_checks),
+        "total_applicable_checks": report.get("total_applicable_checks", total_applicable_checks),
+        "review_required": report.get("review_required", bool(unable_to_verify_checks)),
         "violation_count": len(violations),
     }
 

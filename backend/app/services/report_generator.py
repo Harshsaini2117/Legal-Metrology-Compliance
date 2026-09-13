@@ -129,15 +129,30 @@ def _styles() -> dict[str, ParagraphStyle]:
 def _summary_table(scan_result: Mapping[str, Any], compliance: Mapping[str, Any], styles: Mapping[str, ParagraphStyle]) -> Table:
     input_image = scan_result.get("input_image")
     filename = Path(str(input_image)).name if input_image else "Not available"
-    score = compliance.get("compliance_score")
-    score_text = f"{score}%" if score is not None else "Not available"
+    verified_score = compliance.get("verified_compliance_score", compliance.get("compliance_score"))
+    coverage = compliance.get("evidence_coverage")
+    checks = _mappings(compliance.get("checks"))
+    unresolved = compliance.get("unable_to_verify_checks")
+    if not isinstance(unresolved, int):
+        unresolved = sum(
+            check.get("verification_status") == "UNABLE_TO_VERIFY" for check in checks
+        )
+    if coverage is None and checks:
+        verified = sum(check.get("verification_status", "VERIFIED") == "VERIFIED" for check in checks)
+        applicable = verified + unresolved
+        coverage = round((verified / applicable) * 100) if applicable else None
+    verified_score_text = f"{verified_score}%" if verified_score is not None else "Not available"
+    coverage_text = f"{coverage}%" if coverage is not None else "Not available"
     status = _text(compliance.get("overall_status"), "UNABLE_TO_VERIFY")
     rows = [
         ["Scan Date / Time", datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")],
         ["Input Image", filename],
         ["Overall Compliance Status", status],
-        ["Compliance Score", score_text],
+        ["Verified Compliance", verified_score_text],
+        ["Evidence Coverage", coverage_text],
     ]
+    if compliance.get("review_required") or unresolved:
+        rows.append(["Review Required", f"{unresolved} checks could not be verified"])
     return _table(rows, [42 * mm, 128 * mm], styles, header=None)
 
 

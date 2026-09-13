@@ -3,11 +3,11 @@
 from pathlib import Path
 from typing import Any, Union
 
-from .field_extractor import extract_fields, map_field_evidence
+from .field_extractor import derive_compliance_context, extract_fields, map_field_evidence
 from .evidence_renderer import render_evidence_image
 from .ocr import extract_text
 from .preprocessing import preprocess_image
-from .rules_engine import evaluate_compliance
+from .rules_engine import ComplianceContext, evaluate_compliance
 from .scan_response import attach_evidence_to_checks
 
 
@@ -60,11 +60,14 @@ def process_scan(
     try:
         extracted_fields = extract_fields(ocr_results)
         field_evidence = map_field_evidence(ocr_results, extracted_fields)
+        compliance_context = ComplianceContext(
+            **derive_compliance_context(ocr_results, extracted_fields)
+        )
     except Exception as exc:
         raise ScanProcessingError("field_extraction", str(exc)) from exc
 
     try:
-        compliance_report = evaluate_compliance(extracted_fields)
+        compliance_report = evaluate_compliance(extracted_fields, compliance_context)
     except Exception as exc:
         raise ScanProcessingError("rules_evaluation", str(exc)) from exc
 
@@ -86,6 +89,12 @@ def process_scan(
         "processed_image": str(processed_image),
         "ocr_results": ocr_results,
         "extracted_fields": extracted_fields,
+        "compliance_context": {
+            "imported": compliance_context.imported,
+            "wholesale": compliance_context.wholesale,
+            "unit_sale_price_applicable": compliance_context.unit_sale_price_applicable,
+            "size_relevant": compliance_context.size_relevant,
+        },
         "field_evidence": field_evidence,
         "compliance_report": compliance_report,
         "evidence_image_path": str(evidence_image),

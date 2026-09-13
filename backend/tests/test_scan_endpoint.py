@@ -132,10 +132,14 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
                 {
                     "overall_status": "UNABLE_TO_VERIFY",
                     "compliance_score": 50,
+                    "verified_compliance_score": 50,
+                    "evidence_coverage": 67,
                     "total_checks": 3,
                     "passed_checks": 1,
                     "failed_checks": 1,
                     "unable_to_verify_checks": 1,
+                    "total_applicable_checks": 3,
+                    "review_required": True,
                     "violation_count": 1,
                 },
             )

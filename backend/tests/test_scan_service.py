@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from backend.app.services.rules_engine import ComplianceContext
 from backend.app.services.scan_service import ScanProcessingError, process_scan
 
 
@@ -37,7 +38,10 @@ class ScanServiceTests(unittest.TestCase):
         preprocess.assert_called_once_with(input_image, processed_image)
         ocr.assert_called_once_with(processed_image)
         extractor.assert_called_once_with(ocr_results)
-        rules.assert_called_once_with(fields)
+        rules.assert_called_once_with(
+            fields,
+            ComplianceContext(),
+        )
         renderer.assert_called_once_with(
             input_image, ocr_results, report, fields, coordinate_image_path=processed_image
         )
@@ -45,6 +49,15 @@ class ScanServiceTests(unittest.TestCase):
         self.assertEqual(result["processed_image"], str(processed_image))
         self.assertEqual(result["ocr_results"], ocr_results)
         self.assertEqual(result["extracted_fields"], fields)
+        self.assertEqual(
+            result["compliance_context"],
+            {
+                "imported": None,
+                "wholesale": None,
+                "unit_sale_price_applicable": None,
+                "size_relevant": None,
+            },
+        )
         self.assertEqual(
             result["field_evidence"]["net_quantity"],
             [{

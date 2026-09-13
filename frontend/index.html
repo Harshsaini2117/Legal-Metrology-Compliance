@@ -3,135 +3,77 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="SIH26034 Legal Metrology Compliance Scanner"
-    />
-    <title>LabelLens | Legal Metrology Compliance</title>
+    <meta name="description" content="SIH26034 Legal Metrology AI Compliance Inspection" />
+    <title>Legal Metrology AI | Compliance Inspection</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=20260913-qa4" />
   </head>
   <body>
-    <main class="shell">
-      <nav class="topbar" aria-label="Primary navigation">
-        <a class="brand" href="#top" aria-label="LabelLens home">
-          <span class="brand-mark" aria-hidden="true">L</span>
-          <span>Label<span>Lens</span></span>
-        </a>
-        <span class="nav-label">Legal Metrology Intelligence</span>
-        <a class="nav-chip" href="#scanner">New scan <span aria-hidden="true">↗</span></a>
-      </nav>
-
-      <section class="hero" id="top">
-        <div class="hero-copy">
-          <p class="eyebrow"><span class="pulse"></span> AI-assisted label review</p>
-          <h1>Make every package <em>inspection-ready.</em></h1>
-          <p class="lede">
-            Upload a retail label to surface mandatory declarations, compliance signals,
-            and a downloadable review report in one clear view.
-          </p>
-          <div class="hero-points" aria-label="Product capabilities">
-            <span>OCR-backed evidence</span><span>Rule-based assessment</span><span>PDF report</span>
-          </div>
-        </div>
-        <div class="hero-orbit" aria-hidden="true">
-          <div class="orbit-card orbit-card-top"><b>10</b><span>checks reviewed</span></div>
-          <div class="orbit-core"><span>✓</span><small>SCAN</small></div>
-          <div class="orbit-card orbit-card-bottom"><i></i><span>evidence linked</span></div>
-        </div>
+    <a class="skip-link" href="#scanner">Skip to package inspection</a>
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="#top" aria-label="Legal Metrology AI home"><span class="brand-mark" aria-hidden="true">LM</span><span><strong>Legal Metrology AI</strong><small>Compliance Inspection</small></span></a>
+        <nav class="section-nav" aria-label="Inspection navigation">
+          <a href="#scanner">Inspection</a>
+          <a href="#results">Results</a>
+          <a href="#evidence">Evidence</a>
+          <a href="#history">History</a>
+        </nav>
+        <span class="service-status"><i aria-hidden="true"></i> Service ready</span>
+        <a class="new-inspection" href="#scanner">New Inspection</a>
+      </div>
+    </header>
+    <main class="shell" id="top">
+      <section class="inspection-intro" aria-labelledby="page-title">
+        <div><p class="eyebrow">SIH26034 / Compliance workspace</p><h1 id="page-title">Package Compliance Inspection</h1><p>Scan a packaged commodity label and verify mandatory declarations against deterministic Legal Metrology checks.</p></div>
+        <ol class="workflow" aria-label="Inspection workflow"><li class="is-disabled"><a href="#scanner" aria-disabled="true" tabindex="-1"><b>01</b><span>Upload</span></a></li><li class="is-disabled"><a href="#processing" aria-disabled="true" tabindex="-1"><b>02</b><span>Inspect</span></a></li><li class="is-disabled"><a href="#results" aria-disabled="true" tabindex="-1"><b>03</b><span>Review</span></a></li></ol>
       </section>
 
       <section class="scanner-section" id="scanner" aria-labelledby="scanner-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">01 / Scan a product</p>
-            <h2 id="scanner-title">Upload the package label</h2>
+        <div class="section-heading"><div><p class="eyebrow">Active inspection</p><h2 id="scanner-title">Package inspection</h2></div><p class="format-note">JPG, PNG, WEBP &middot; Maximum 10 MB</p></div>
+        <div class="scanner-workspace">
+          <div class="upload-column">
+            <div class="workspace-label">Package image</div>
+            <label class="dropzone" id="dropzone" for="image-input">
+              <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+              <span class="upload-icon" aria-hidden="true">&#8679;</span><strong>Drop package image here</strong><span>or browse from your device</span><small>Use a clear, well-lit label image with declarations in view.</small>
+            </label>
+            <p class="upload-guidance">Supported formats: <b>JPG, PNG, WEBP</b> &middot; Max. file size: <b>10 MB</b></p>
           </div>
-          <p>JPG, PNG, or WEBP · maximum 10 MB</p>
-        </div>
-
-        <div class="upload-layout">
-          <label class="dropzone" id="dropzone" for="image-input">
-            <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden />
-            <span class="upload-icon" aria-hidden="true">↑</span>
-            <strong>Drop a label image here</strong>
-            <span>or browse from your device</span>
-          </label>
-          <div class="preview-panel" id="preview-panel">
-            <div class="preview-empty" id="preview-empty">
-              <span aria-hidden="true">▧</span>
-              <p>Your label preview will appear here</p>
-            </div>
-            <img id="image-preview" alt="Selected product label preview" hidden />
-            <div class="preview-meta" id="preview-meta" hidden>
-              <span id="file-name"></span>
-              <button class="text-button" id="clear-file" type="button">Remove</button>
+          <div class="preview-column">
+            <div class="preview-heading">Package preview</div>
+            <div class="preview-panel" id="preview-panel">
+              <div class="preview-empty" id="preview-empty"><span aria-hidden="true">&#9635;</span><p id="preview-state">No image selected</p><small>Your selected label will appear here.</small></div>
+              <img id="image-preview" alt="Selected package label preview" hidden />
+              <div class="preview-meta" id="preview-meta" hidden></div>
             </div>
           </div>
         </div>
-        <div class="scan-actions">
-          <p class="form-message" id="form-message" role="status" aria-live="polite">Select a package image to begin.</p>
-          <button class="scan-button" id="scan-button" type="button" disabled>
-            <span class="button-label">Scan product</span><span aria-hidden="true">→</span>
-          </button>
-        </div>
+        <div class="scan-actions"><p class="form-message" id="form-message" role="status" aria-live="polite">Select a package image to begin.</p><button class="scan-button" id="scan-button" type="button" disabled><span class="button-label">Run Inspection</span><span aria-hidden="true">&rarr;</span></button></div>
       </section>
 
-      <section class="processing" id="processing" hidden aria-live="polite">
-        <div class="processing-spinner" aria-hidden="true"></div>
-        <div><p class="eyebrow">Processing label</p><h2>Reading declarations and applying checks…</h2></div>
+      <section class="processing" id="processing" hidden aria-hidden="true" style="display: none" aria-labelledby="processing-title" aria-live="polite">
+        <div class="processing-heading"><span class="processing-spinner" id="processing-indicator" aria-hidden="true"></span><div><p class="eyebrow">Processing</p><h2 id="processing-title">Inspection in progress</h2><p id="processing-description">Analysing package label. The service returns one completed response; individual stages are shown without simulated progress.</p></div></div>
+        <ol class="processing-stages" aria-label="Inspection processing stages"><li><b>1</b> Image received</li><li><b>2</b> Image preprocessing</li><li><b>3</b> OCR analysis</li><li><b>4</b> Declaration extraction</li><li><b>5</b> Compliance validation</li><li><b>6</b> Evidence mapping</li></ol>
       </section>
 
-      <section class="results" id="results" hidden aria-live="polite">
-        <div class="results-head">
-          <div>
-            <p class="eyebrow">02 / Assessment complete</p>
-            <h2>Compliance result</h2>
-            <p id="result-file"></p>
-          </div>
-          <a class="report-button" id="report-download" href="#" hidden>
-            Download PDF Report <span aria-hidden="true">↓</span>
-          </a>
+      <section class="results" id="results" hidden aria-live="polite" aria-labelledby="results-title">
+        <div class="results-head"><div><p class="eyebrow">Completed inspection</p><h2 id="results-title">Compliance result</h2><p id="result-file"></p></div><div class="report-actions"><a class="report-button" id="report-download" href="#" hidden download>View report <span aria-hidden="true">&rarr;</span></a><span id="report-note" hidden>View / Download PDF</span></div></div>
+        <div class="result-summary">
+          <div class="status-banner" id="status-banner" role="status"><span class="status-icon" id="status-icon" aria-hidden="true"></span><div><p>Overall assessment</p><h3 id="overall-status">Assessment unavailable</h3><span id="status-description"></span></div><div class="score"><strong id="compliance-score">&mdash;</strong><span>score / 100</span></div></div>
+          <div class="metrics" id="metrics" aria-label="Inspection summary"></div>
         </div>
-
-        <div class="status-banner" id="status-banner">
-          <div class="status-icon" id="status-icon">✓</div>
-          <div><p id="status-kicker">Overall status</p><h3 id="overall-status">—</h3><span id="status-description"></span></div>
-          <div class="score"><strong id="compliance-score">—</strong><span>compliance score</span></div>
-        </div>
-
-        <div class="metrics" id="metrics"></div>
-
-        <div class="result-grid">
-          <article class="result-card fields-card">
-            <div class="card-head"><div><p class="eyebrow">Detected label data</p><h3>Extracted fields</h3></div><span class="card-dot"></span></div>
-            <dl class="fields-list" id="fields-list"></dl>
-          </article>
-          <article class="result-card checks-card">
-            <div class="card-head"><div><p class="eyebrow">Rule evaluation</p><h3>Review checks</h3></div></div>
-            <div class="checks-list" id="checks-list"></div>
-          </article>
-        </div>
-
-        <article class="result-card violations-card" id="violations-card">
-          <div class="card-head"><div><p class="eyebrow">Requires attention</p><h3>Violations</h3></div><span id="violation-count"></span></div>
-          <div id="violations-list"></div>
-        </article>
-
-        <article class="result-card evidence-card">
-          <div class="card-head"><div><p class="eyebrow">Traceable output</p><h3>OCR evidence</h3></div><span class="evidence-tag">DETECTIONS</span></div>
-          <p class="evidence-intro">Detected text is retained below so each assessment can be traced back to label evidence.</p>
-          <div class="evidence-list" id="evidence-list"></div>
-        </article>
+        <article class="result-card fields-card"><div class="card-head"><div><p class="eyebrow">OCR declaration extraction</p><h3>Detected declarations</h3></div><span class="card-tag">LABEL DATA</span></div><dl class="fields-list" id="fields-list"></dl></article>
+        <article class="result-card checks-card"><div class="card-head"><div><p class="eyebrow">Deterministic rules</p><h3>Compliance checks</h3></div><span class="card-tag">CHECK STATUS</span></div><div class="checks-table-head" aria-hidden="true"><span>Check</span><span>Status</span><span>Finding</span><span>Evidence</span></div><div class="checks-list" id="checks-list"></div></article>
+        <article class="result-card violations-card" id="violations-card"><div class="card-head"><div><p class="eyebrow">Enforcement attention</p><h3>Violations requiring attention</h3></div><span id="violation-count"></span></div><div id="violations-list"></div></article>
+        <article class="result-card evidence-card" id="evidence"><div class="card-head"><div><p class="eyebrow">Evidence workspace</p><h3>OCR evidence review</h3></div><span class="card-tag" id="evidence-count">0 DETECTIONS</span></div><div class="evidence-workspace"><div class="evidence-preview" id="evidence-preview"><p id="evidence-preview-label">Package image</p><img id="evidence-image" alt="Package image used for inspection" hidden /><div id="evidence-preview-empty"><span aria-hidden="true">&#9635;</span><small>Selected package image will be available after inspection.</small></div></div><div class="evidence-detections"><p class="evidence-intro">OCR detections returned by the service. Field or rule labels are shown only when supplied by the backend.</p><div class="evidence-list" id="evidence-list"></div></div></div></article>
       </section>
+
+      <section class="history-section" id="history" aria-labelledby="history-title"><div class="section-heading"><div><p class="eyebrow">Secondary workspace</p><h2 id="history-title">Recent inspections</h2></div><div class="history-actions"><span class="history-feedback" id="history-feedback" role="status" aria-live="polite"></span><button class="refresh-history" id="refresh-history" type="button">Refresh history</button></div></div><div class="history-list" id="history-list"><div class="history-empty"><span aria-hidden="true">&#9711;</span><p>No completed inspections yet</p><small>Completed package inspections will appear here.</small></div></div></section>
     </main>
-
-    <footer><span>SIH26034 · Packaged Commodity Compliance</span><span>Built for faster, explainable reviews</span></footer>
-    <script src="app.js"></script>
+    <footer><div class="shell footer-inner"><span>SIH26034 &middot; Legal Metrology AI</span><span>Automated Packaged Commodity Inspection</span></div></footer>
+    <script src="app.js?v=20260913-qa4"></script>
   </body>
 </html>

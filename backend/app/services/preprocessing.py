@@ -5,18 +5,22 @@ from typing import Union
 
 import cv2
 import numpy as np
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 PathLike = Union[str, Path]
 MAX_IMAGE_DIMENSION = 2_000
+MIN_OCR_DIMENSION = 1_200
 
 
 def preprocess_image(input_path: PathLike, output_path: PathLike) -> Path:
-    """Create a normalized, OCR-friendly grayscale image.
+    """Create a normalized, OCR-friendly image while preserving text detail.
 
-    Images larger than ``MAX_IMAGE_DIMENSION`` on either side are downscaled
-    proportionally before light denoising, local contrast enhancement, and
-    adaptive thresholding. The saved result is a single-channel binary image.
+    The source is first corrected for a trusted EXIF orientation, resized
+    proportionally to a useful OCR range, and given a mild LAB luminance
+    normalization.  Colour channels and antialiasing are retained; aggressive
+    thresholding and guessed perspective transforms are deliberately avoided
+    because they can erase small declarations or distort package artwork.
 
     Args:
         input_path: Path to a source image readable by OpenCV.
@@ -37,8 +41,10 @@ def preprocess_image(input_path: PathLike, output_path: PathLike) -> Path:
         raise FileNotFoundError(f"Input image does not exist or is not a file: {source}")
 
     try:
-        image = cv2.imread(str(source), cv2.IMREAD_COLOR)
-    except cv2.error as exc:
+        with Image.open(source) as opened:
+            oriented = ImageOps.exif_transpose(opened).convert("RGB")
+            image = cv2.cvtColor(np.asarray(oriented), cv2.COLOR_RGB2BGR)
+    except (UnidentifiedImageError, OSError, ValueError, cv2.error) as exc:
         raise ValueError(f"Unable to read input image: {source}") from exc
 
     if image is None or image.size == 0:
@@ -49,29 +55,20 @@ def preprocess_image(input_path: PathLike, output_path: PathLike) -> Path:
         raise ValueError(f"Input image has invalid dimensions: {source}")
 
     largest_dimension = max(height, width)
-    if largest_dimension > MAX_IMAGE_DIMENSION:
-        scale = MAX_IMAGE_DIMENSION / largest_dimension
+    if largest_dimension > MAX_IMAGE_DIMENSION or largest_dimension < MIN_OCR_DIMENSION:
+        target_dimension = min(MAX_IMAGE_DIMENSION, max(MIN_OCR_DIMENSION, largest_dimension))
+        scale = target_dimension / largest_dimension
         image = cv2.resize(
             image,
             (round(width * scale), round(height * scale)),
-            interpolation=cv2.INTER_AREA,
+            interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC,
         )
 
-    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    denoised = cv2.GaussianBlur(grayscale, (3, 3), 0)
-    enhanced = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(denoised)
-    processed = cv2.adaptiveThreshold(
-        enhanced,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        11,
-    )
+    image = _normalize_luminance(image)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
-        written = cv2.imwrite(str(destination), processed)
+        written = cv2.imwrite(str(destination), image)
     except cv2.error as exc:
         raise OSError(f"Unable to write processed image: {destination}") from exc
 
@@ -79,3 +76,12 @@ def preprocess_image(input_path: PathLike, output_path: PathLike) -> Path:
         raise OSError(f"Unable to write processed image: {destination}")
 
     return destination
+
+
+def _normalize_luminance(image: np.ndarray) -> np.ndarray:
+    """Improve uneven label lighting without converting colour artwork to binary."""
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    lightness, a_channel, b_channel = cv2.split(lab)
+    normalized_lightness = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(lightness)
+    normalized = cv2.merge((normalized_lightness, a_channel, b_channel))
+    return cv2.cvtColor(normalized, cv2.COLOR_LAB2BGR)
