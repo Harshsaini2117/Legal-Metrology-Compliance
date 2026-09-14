@@ -17,7 +17,13 @@ PNG_BYTES = base64.b64decode(
 
 
 class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
-    async def _post_scan(self, filename: str | None = None, content: bytes = b"", content_type: str = "image/png"):
+    async def _post_scan(
+        self,
+        filename: str | None = None,
+        content: bytes = b"",
+        content_type: str = "image/png",
+        path: str = "/scan",
+    ):
         boundary = "scan-test-boundary"
         body = b""
         if filename is not None:
@@ -33,8 +39,8 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
             "http_version": "1.1",
             "method": "POST",
             "scheme": "http",
-            "path": "/scan",
-            "raw_path": b"/scan",
+            "path": path,
+            "raw_path": path.encode(),
             "query_string": b"",
             "headers": [
                 (b"content-type", f"multipart/form-data; boundary={boundary}".encode()),
@@ -211,6 +217,30 @@ class ScanEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(status, 400)
         self.assertEqual(response["detail"], "Only JPEG, PNG, and WEBP images are allowed.")
+
+    async def test_upload_uses_verified_format_not_client_mime_or_filename(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch("backend.app.main.UPLOAD_DIR", Path(temporary_directory)):
+                status, response = await self._post_scan(
+                    "label.exe", PNG_BYTES, "application/octet-stream", "/scan/upload"
+                )
+
+            saved_files = list(Path(temporary_directory).glob("*.png"))
+            saved_contents = [saved_file.read_bytes() for saved_file in saved_files]
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response["content_type"], "image/png")
+        self.assertTrue(response["stored_filename"].endswith(".png"))
+        self.assertEqual(len(saved_files), 1)
+        self.assertEqual(saved_contents, [PNG_BYTES])
+
+    async def test_upload_rejects_invalid_image_bytes_despite_image_mime(self):
+        status, response = await self._post_scan(
+            "label.png", b"not an image", "image/png", "/scan/upload"
+        )
+
+        self.assertEqual(status, 400)
+        self.assertEqual(response["detail"], "The uploaded file is not a valid image.")
 
     async def test_scan_requires_a_file(self):
         status, response = await self._post_scan()

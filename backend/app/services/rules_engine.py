@@ -266,9 +266,14 @@ def _check_unit_sale_price(data: Mapping[str, Any], rule: RuleDefinition, contex
     applicable = _unit_sale_price_applicability(data, context)
     if applicable is False:
         return _not_applicable(rule, "Unit sale price is not applicable to the normalized quantity context.")
-    if applicable is not True:
-        return _unable(rule, "Unit-sale-price applicability is not available in the normalized fields.")
     value = data.get("unit_sale_price")
+    if applicable is not True:
+        # A declaration that is already present and valid can be verified
+        # without deciding whether the conditional rule applied to this pack.
+        # Only a missing declaration needs that applicability fact.
+        if _has_value(value) and _valid_unit_sale_price(value, data.get("net_quantity")):
+            return _pass(rule, "Unit sale price was detected with a usable format.")
+        return _unable(rule, "Unit-sale-price applicability is not available in the normalized fields.")
     if not _has_value(value):
         return _fail(rule, "Unit sale price is required for the normalized quantity context but was not detected.")
     if not _valid_unit_sale_price(value, data.get("net_quantity")):

@@ -39,6 +39,13 @@ class FieldExtractorTests(unittest.TestCase):
             },
         )
 
+    def test_product_of_india_establishes_non_imported_context(self):
+        ocr_results = [{"text": "PRODUCT OF INDIA"}]
+
+        self.assertFalse(
+            derive_compliance_context(ocr_results, extract_fields(ocr_results))["imported"]
+        )
+
     def test_extracts_normalized_fields_from_product_label_ocr(self):
         ocr_results = [
             {"text": "NATUREFRESH HERBAL TEA", "confidence": 0.99, "bounding_box": None},
@@ -806,6 +813,17 @@ class FieldExtractorTests(unittest.TestCase):
         ])
         self.assertEqual(fields["consumer_care"], "Call 1800-123-4567 help@example.test")
 
+    def test_consumer_care_subheading_does_not_hide_spatial_contact_details(self):
+        fields = extract_fields([
+            {"text": "For Consumer Complaints / Feedback:", "bounding_box": [[10, 10], [350, 10], [350, 30], [10, 30]]},
+            {"text": "Customer Care Manager", "bounding_box": [[10, 38], [260, 38], [260, 58], [10, 58]]},
+            {"text": "Toll Free: 1800 123 4567", "bounding_box": [[10, 66], [290, 66], [290, 86], [10, 86]]},
+            {"text": "Email: help@example.test", "bounding_box": [[10, 94], [280, 94], [280, 114], [10, 114]]},
+        ])
+
+        self.assertIn("1800 123 4567", fields["consumer_care"])
+        self.assertIn("help@example.test", fields["consumer_care"])
+
     def test_spatial_mrp_tax_ownership_rejects_neighboring_column(self):
         same_panel = extract_fields([
             {"text": "MRP", "bounding_box": [[10, 30], [45, 30], [45, 45], [10, 45]]},
@@ -831,13 +849,58 @@ class FieldExtractorTests(unittest.TestCase):
         self.assertEqual(fields["mrp"], "50")
         self.assertEqual(fields["mrp_inclusive_of_taxes"], "Inclusive of all taxes")
 
-    def test_prefers_descriptive_spatial_product_name_over_standalone_brand_text(self):
+    def test_brand_like_text_competes_with_a_descriptive_product_title(self):
         fields = extract_fields([
             {"text": "Brightmark", "confidence": 1.0, "bounding_box": [[10, 10], [150, 10], [150, 40], [10, 40]]},
             {"text": "Spiced Vegetable Crisps", "confidence": 1.0, "bounding_box": [[10, 52], [250, 52], [250, 68], [10, 68]]},
             {"text": "Net Quantity: 150 g", "confidence": 0.98, "bounding_box": [[10, 90], [190, 90], [190, 105], [10, 105]]},
         ])
         self.assertEqual(fields["product_name"], "Spiced Vegetable Crisps")
+
+    def test_product_title_beats_a_prominent_brand_in_a_separate_title_panel(self):
+        fields = extract_fields([
+            {"text": "Northstar", "confidence": 0.99, "bounding_box": [[20, 20], [310, 20], [310, 120], [20, 120]]},
+            {"text": "Good choices for every day", "confidence": 0.96, "bounding_box": [[20, 135], [290, 135], [290, 155], [20, 155]]},
+            {"text": "Smoky Lentil Crackers", "confidence": 1.0, "bounding_box": [[20, 220], [380, 220], [380, 255], [20, 255]]},
+            {"text": "Net Quantity: 180 g", "confidence": 0.98, "bounding_box": [[600, 45], [830, 45], [830, 70], [600, 70]]},
+            {"text": "MRP: Rs 95", "confidence": 0.98, "bounding_box": [[600, 90], [760, 90], [760, 115], [600, 115]]},
+        ])
+
+        self.assertEqual(fields["product_name"], "Smoky Lentil Crackers")
+
+    def test_product_title_beats_brand_tagline_and_repeated_marketing_badge(self):
+        fields = extract_fields([
+            {"text": "Fieldcrest", "confidence": 0.99, "bounding_box": [[20, 20], [310, 20], [310, 120], [20, 120]]},
+            {"text": "Goodness every day", "confidence": 0.99, "bounding_box": [[70, 118], [260, 118], [260, 150], [70, 150]]},
+            {"text": "Savory Bean Crisps", "confidence": 1.0, "bounding_box": [[30, 205], [390, 205], [390, 250], [30, 250]]},
+            {"text": "Pure Grains", "confidence": 1.0, "bounding_box": [[620, 55], [830, 55], [830, 110], [620, 110]]},
+            {"text": "Pure Taste", "confidence": 1.0, "bounding_box": [[620, 125], [830, 125], [830, 180], [620, 180]]},
+            {"text": "Pure Joy", "confidence": 1.0, "bounding_box": [[620, 195], [830, 195], [830, 250], [620, 250]]},
+            {"text": "Net Quantity: 180 g", "confidence": 0.98, "bounding_box": [[420, 300], [650, 300], [650, 325], [420, 325]]},
+        ])
+
+        self.assertEqual(fields["product_name"], "Savory Bean Crisps")
+
+    def test_preserves_valid_standalone_spatial_product_name(self):
+        fields = extract_fields([
+            {"text": "Solace", "confidence": 0.98, "bounding_box": [[20, 20], [260, 20], [260, 75], [20, 75]]},
+            {"text": "Net Quantity: 50 g", "confidence": 0.98, "bounding_box": [[20, 105], [250, 105], [250, 125], [20, 125]]},
+        ])
+
+        self.assertEqual(fields["product_name"], "Solace")
+
+    def test_rejects_false_positive_text_when_no_product_title_exists(self):
+        fields = extract_fields([
+            {"text": "Ingredients: grain, salt, spice", "confidence": 0.99, "bounding_box": [[10, 10], [330, 10], [330, 35], [10, 35]]},
+            {"text": "Nutrition Energy 420 kcal", "confidence": 0.99, "bounding_box": [[10, 45], [330, 45], [330, 70], [10, 70]]},
+            {"text": "FSSAI Licence 10000000000001", "confidence": 0.99, "bounding_box": [[10, 80], [350, 80], [350, 105], [10, 105]]},
+            {"text": "GSTIN 27ABCDE1234F1Z5", "confidence": 0.99, "bounding_box": [[10, 115], [300, 115], [300, 140], [10, 140]]},
+            {"text": "Call 9876543210 for delivery", "confidence": 0.99, "bounding_box": [[10, 150], [330, 150], [330, 175], [10, 175]]},
+            {"text": "14 Market Road, Pune - 411001", "confidence": 0.99, "bounding_box": [[10, 185], [360, 185], [360, 210], [10, 210]]},
+            {"text": "8901234567890", "confidence": 0.99, "bounding_box": [[10, 220], [180, 220], [180, 245], [10, 245]]},
+        ])
+
+        self.assertIsNone(fields["product_name"])
 
     def test_links_split_mrp_label_to_local_inclusive_tax_wording(self):
         fields = extract_fields([

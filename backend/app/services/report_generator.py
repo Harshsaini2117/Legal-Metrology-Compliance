@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from html import escape
 from os import PathLike
 from pathlib import Path
@@ -12,10 +13,12 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
-_PROJECT_TITLE = "SIH26034 Legal Metrology Compliance Report"
+_PROJECT_TITLE = "Legal Metrology Compliance Report"
 _DISCLAIMER = (
     "Disclaimer: This report is an automated screening and assessment based on OCR-extracted label "
     "information and deterministic checks. It is not a final legal determination or legal advice."
@@ -31,15 +34,21 @@ _PREFERRED_FIELDS = (
     ("importer", "Importer"),
     ("importer_address", "Importer Address"),
     ("country_of_origin", "Country of Origin"),
-    ("month_year", "Manufacture / Pack / Import Date"),
+    ("manufacture_date", "Manufacture Date"),
+    ("packing_date", "Packing Date"),
+    ("import_date", "Import Date"),
     ("size", "Size / Dimensions"),
 )
+_DATE_FIELDS = ("manufacture_date", "packing_date", "import_date")
 _STATUS_COLORS = {
     "PASS": colors.HexColor("#1B5E20"),
     "FAIL": colors.HexColor("#B71C1C"),
     "NOT_APPLICABLE": colors.HexColor("#455A64"),
     "UNABLE_TO_VERIFY": colors.HexColor("#8A5A00"),
 }
+_FONT_NAME = "SIH26034Report"
+_FONT_BOLD_NAME = "SIH26034ReportBold"
+_FONT_DIRECTORY = Path("C:/Windows/Fonts")
 
 
 def generate_compliance_report(scan_result: Mapping[str, Any], output_path: str | PathLike[str]) -> Path:
@@ -113,17 +122,26 @@ def _build_report(scan_result: Mapping[str, Any], destination: Path) -> None:
 
 
 def _styles() -> dict[str, ParagraphStyle]:
+    _register_report_fonts()
     base = getSampleStyleSheet()
     return {
         "title": ParagraphStyle(
-            "ReportTitle", parent=base["Title"], alignment=TA_CENTER, textColor=colors.HexColor("#0D3559"), leading=24
+            "ReportTitle", parent=base["Title"], fontName=_FONT_BOLD_NAME, alignment=TA_CENTER, textColor=colors.HexColor("#0D3559"), leading=24
         ),
-        "heading": ParagraphStyle("ReportHeading", parent=base["Heading2"], textColor=colors.HexColor("#0D3559"), spaceBefore=10, spaceAfter=5),
-        "body": ParagraphStyle("ReportBody", parent=base["BodyText"], fontSize=8.5, leading=11),
-        "small": ParagraphStyle("ReportSmall", parent=base["BodyText"], fontSize=7.5, leading=9),
-        "header": ParagraphStyle("ReportHeader", parent=base["BodyText"], fontSize=7.5, leading=9, textColor=colors.white),
-        "disclaimer": ParagraphStyle("ReportDisclaimer", parent=base["BodyText"], fontSize=8, leading=10, textColor=colors.HexColor("#5A4A00")),
+        "heading": ParagraphStyle("ReportHeading", parent=base["Heading2"], fontName=_FONT_BOLD_NAME, textColor=colors.HexColor("#0D3559"), spaceBefore=10, spaceAfter=5),
+        "body": ParagraphStyle("ReportBody", parent=base["BodyText"], fontName=_FONT_NAME, fontSize=8.5, leading=11),
+        "small": ParagraphStyle("ReportSmall", parent=base["BodyText"], fontName=_FONT_NAME, fontSize=7.5, leading=9),
+        "header": ParagraphStyle("ReportHeader", parent=base["BodyText"], fontName=_FONT_BOLD_NAME, fontSize=7.5, leading=9, textColor=colors.white),
+        "disclaimer": ParagraphStyle("ReportDisclaimer", parent=base["BodyText"], fontName=_FONT_NAME, fontSize=8, leading=10, textColor=colors.HexColor("#5A4A00")),
     }
+
+
+def _register_report_fonts() -> None:
+    """Embed a Unicode-capable font so Indian rupee amounts render correctly."""
+    if _FONT_NAME not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(_FONT_NAME, str(_FONT_DIRECTORY / "arial.ttf")))
+    if _FONT_BOLD_NAME not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(_FONT_BOLD_NAME, str(_FONT_DIRECTORY / "arialbd.ttf")))
 
 
 def _summary_table(scan_result: Mapping[str, Any], compliance: Mapping[str, Any], styles: Mapping[str, ParagraphStyle]) -> Table:
@@ -153,27 +171,52 @@ def _summary_table(scan_result: Mapping[str, Any], compliance: Mapping[str, Any]
     ]
     if compliance.get("review_required") or unresolved:
         rows.append(["Review Required", f"{unresolved} checks could not be verified"])
+    rows.extend(
+        [
+            ["PASS Checks", str(compliance.get("passed_checks", _count_checks(checks, "PASS")))],
+            ["FAIL Checks", str(compliance.get("failed_checks", _count_checks(checks, "FAIL")))],
+            ["UNABLE_TO_VERIFY Checks", str(unresolved)],
+        ]
+    )
     return _table(rows, [42 * mm, 128 * mm], styles, header=None)
 
 
 def _fields_table(fields: Mapping[str, Any], styles: Mapping[str, ParagraphStyle]) -> Table:
     preferred_names = {name for name, _ in _PREFERRED_FIELDS}
-    rows = [(label, _display_value(fields.get(name))) for name, label in _PREFERRED_FIELDS if _has_value(fields.get(name))]
-    rows.extend((_humanize(name), _display_value(value)) for name, value in fields.items() if name not in preferred_names and _has_value(value))
+    rows = [
+        (label, _display_field_value(name, fields.get(name)))
+        for name, label in _PREFERRED_FIELDS
+        if _has_value(fields.get(name))
+    ]
+    # Older scan payloads may only have the legacy normalized month/year. Do
+    # not show it next to a typed legal date or leak the internal date-type key.
+    if not any(_has_value(fields.get(name)) for name in _DATE_FIELDS) and _has_value(fields.get("month_year")):
+        rows.append(("Manufacture / Pack / Import Date", _display_value(fields["month_year"])))
+    suppressed_names = preferred_names | {"month_year", "month_year_date_type"}
+    rows.extend(
+        (_humanize(name), _display_field_value(name, value))
+        for name, value in fields.items()
+        if name not in suppressed_names and _has_value(value)
+    )
     if not rows:
         rows = [("Extracted Fields", "No normalized field values were available.")]
     return _table(rows, [58 * mm, 112 * mm], styles, header=None)
 
 
 def _checks_table(raw_checks: Any, styles: Mapping[str, ParagraphStyle]) -> Table:
-    rows = [["Rule / Check", "Status", "Explanation"]]
+    rows = [["Rule / Check", "Status", "Explanation", "OCR Evidence"]]
     for check in _mappings(raw_checks):
         status = _check_status(check)
         label = " - ".join(part for part in (_text(check.get("rule_id")), _humanize(_text(check.get("field")))) if part)
-        rows.append([label or "Compliance check", status, _text(check.get("message"), "No explanation available.")])
+        rows.append([
+            label or "Compliance check",
+            status,
+            _text(check.get("message"), "No explanation available."),
+            _check_evidence_text(check.get("ocr_evidence")),
+        ])
     if len(rows) == 1:
-        rows.append(["No compliance checks", "UNABLE_TO_VERIFY", "No rule-evaluation data was available."])
-    return _table(rows, [48 * mm, 31 * mm, 91 * mm], styles, header=rows[0])
+        rows.append(["No compliance checks", "UNABLE_TO_VERIFY", "No rule-evaluation data was available.", "No OCR evidence available."])
+    return _table(rows, [34 * mm, 25 * mm, 66 * mm, 45 * mm], styles, header=rows[0])
 
 
 def _violations_table(raw_violations: Any, styles: Mapping[str, ParagraphStyle]) -> Table:
@@ -238,7 +281,8 @@ def _table(rows: Sequence[Sequence[Any]], widths: list[float], styles: Mapping[s
 
 def _page_footer(canvas: Any, document: Any) -> None:
     canvas.saveState()
-    canvas.setFont("Helvetica", 7)
+    _register_report_fonts()
+    canvas.setFont(_FONT_NAME, 7)
     canvas.setFillColor(colors.HexColor("#607D8B"))
     canvas.drawString(document.leftMargin, 11 * mm, "SIH26034 - Automated Legal Metrology Screening")
     canvas.drawRightString(A4[0] - document.rightMargin, 11 * mm, f"Page {document.page}")
@@ -272,6 +316,40 @@ def _has_value(value: Any) -> bool:
 
 def _display_value(value: Any) -> str:
     return str(value) if not isinstance(value, bool) else ("Yes" if value else "No")
+
+
+def _display_field_value(name: str, value: Any) -> str:
+    if name == "mrp" and isinstance(value, str):
+        return _format_mrp(value)
+    return _display_value(value)
+
+
+def _format_mrp(value: str) -> str:
+    """Present a normalized Indian MRP as a human-readable rupee amount."""
+    try:
+        amount = Decimal(value.replace(",", "").strip())
+    except InvalidOperation:
+        return value
+    if not amount.is_finite() or amount < 0:
+        return value
+    return f"₹{format(amount.normalize(), 'f')}"
+
+
+def _count_checks(checks: Sequence[Mapping[str, Any]], status: str) -> int:
+    return sum(_check_status(check) == status for check in checks)
+
+
+def _check_evidence_text(raw_evidence: Any) -> str:
+    evidence = _mappings(raw_evidence)
+    if not evidence:
+        return "No linked OCR evidence."
+    references = []
+    for item in evidence:
+        text = _text(item.get("source_ocr_text"), "[No text]")
+        confidence = item.get("confidence")
+        confidence_text = f" ({float(confidence):.0%})" if isinstance(confidence, (int, float)) else ""
+        references.append(f"{text}{confidence_text}")
+    return " | ".join(references)
 
 
 def _humanize(value: str) -> str:

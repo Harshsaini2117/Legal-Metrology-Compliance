@@ -213,7 +213,13 @@ function renderResults(result) {
   const violations = Array.isArray(report.violations) ? report.violations : [];
   const summary = result.summary || {};
   const status = summary.overall_status || report.overall_status || 'UNABLE_TO_VERIFY';
-  const returnedStatus = check => String(check.status || check.verification_status || '').toUpperCase();
+  // A check that could not be verified deliberately has a NOT_APPLICABLE
+  // rule status. Its verification status is the user-facing outcome.
+  const returnedStatus = check => {
+    const verificationStatus = String(check.verification_status || '').toUpperCase();
+    if (verificationStatus === 'UNABLE_TO_VERIFY' || verificationStatus === 'NOT_APPLICABLE') return verificationStatus;
+    return String(check.status || verificationStatus || '').toUpperCase();
+  };
   const computed = {
     total: checks.length,
     passed: checks.filter(check => returnedStatus(check) === 'PASS').length,
@@ -228,14 +234,14 @@ function renderResults(result) {
     UNABLE_TO_VERIFY: 'The available label evidence was insufficient to verify one or more declarations.'
   };
   const symbols = { COMPLIANT: 'PASS', NON_COMPLIANT: 'FAIL', UNABLE_TO_VERIFY: '?' };
-  const score = summary.compliance_score ?? report.compliance_score;
+  const evidenceCoverage = summary.evidence_coverage ?? report.evidence_coverage;
 
   document.querySelector('#result-file').textContent = selectedFile?.name || 'Product label';
   document.querySelector('#status-banner').className = `status-banner ${status.toLowerCase().replaceAll('_', '-')}`;
   document.querySelector('#status-icon').textContent = symbols[status] || '?';
   document.querySelector('#overall-status').textContent = statusLabels[status] || readable(status);
   document.querySelector('#status-description').textContent = descriptions[status] || 'Assessment completed with the evidence returned by the scan service.';
-  document.querySelector('#compliance-score').textContent = score == null ? '-' : `${score} / 100`;
+  document.querySelector('#compliance-score').textContent = evidenceCoverage == null ? '-' : `${evidenceCoverage}%`;
 
   const metrics = [
     [computed.passed, 'passed'],
@@ -265,7 +271,7 @@ function renderResults(result) {
     const evidence = Array.isArray(check.ocr_evidence) && check.ocr_evidence.length
       ? `${check.ocr_evidence.length} linked OCR item${check.ocr_evidence.length === 1 ? '' : 's'}`
       : 'No linked evidence returned';
-    return `<div class="check ${state}" tabindex="0"><div class="check-name"><b>${escapeHtml(label)}</b>${metadata ? `<small>${escapeHtml(metadata)}</small>` : ''}</div><span class="check-status">${escapeHtml(check.status || check.verification_status || '-')}</span><div class="check-finding">${escapeHtml(check.message || 'No finding message returned.')}</div><div class="check-evidence">${escapeHtml(evidence)}</div></div>`;
+    return `<div class="check ${state}" tabindex="0"><div class="check-name"><b>${escapeHtml(label)}</b>${metadata ? `<small>${escapeHtml(metadata)}</small>` : ''}</div><span class="check-status">${escapeHtml(checkState || '-')}</span><div class="check-finding">${escapeHtml(check.message || 'No finding message returned.')}</div><div class="check-evidence">${escapeHtml(evidence)}</div></div>`;
   }).join('') : '<p class="empty">No check details were returned by the scan service.</p>';
 
   document.querySelector('#violation-count').textContent = `${violations.length} item${violations.length === 1 ? '' : 's'}`;

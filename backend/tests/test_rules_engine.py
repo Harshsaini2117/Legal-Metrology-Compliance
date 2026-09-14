@@ -221,6 +221,16 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(check["status"], STATUS_NOT_APPLICABLE)
         self.assertEqual(check["verification_status"], "UNABLE_TO_VERIFY")
 
+    def test_present_valid_unit_sale_price_is_verified_when_applicability_is_unknown(self):
+        declarations = compliant_declarations()
+        declarations.pop("unit_sale_price_applicable")
+        declarations["unit_sale_price"] = "Rs. 0.33 per g"
+
+        check = check_by_rule(evaluate_compliance(declarations), "LMPC-R6-09")
+
+        self.assertEqual(check["status"], STATUS_PASS)
+        self.assertEqual(check["verification_status"], "VERIFIED")
+
     def test_unit_sale_price_is_unable_to_verify_without_quantity_or_context(self):
         declarations = compliant_declarations()
         declarations.pop("unit_sale_price_applicable")

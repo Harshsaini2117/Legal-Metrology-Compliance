@@ -46,6 +46,12 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp",
 }
 
+IMAGE_FORMAT_DETAILS = {
+    "JPEG": ("image/jpeg", ".jpg"),
+    "PNG": ("image/png", ".png"),
+    "WEBP": ("image/webp", ".webp"),
+}
+
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
@@ -60,28 +66,10 @@ def health_check():
 
 @app.post("/scan/upload")
 async def upload_product_image(file: UploadFile = File(...)):
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="Only JPEG, PNG, and WEBP images are allowed.",
-        )
-
-    contents = await file.read()
-
-    if len(contents) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail="Image size must be 10 MB or less.",
-        )
-
-    extension = Path(file.filename or "").suffix.lower()
-
-    if not extension:
-        extension = {
-            "image/jpeg": ".jpg",
-            "image/png": ".png",
-            "image/webp": ".webp",
-        }[file.content_type]
+    contents, image_format = await _validate_image_upload(
+        file, require_content_type_match=False
+    )
+    verified_content_type, extension = IMAGE_FORMAT_DETAILS[image_format]
 
     stored_filename = f"{uuid4().hex}{extension}"
     output_path = UPLOAD_DIR / stored_filename
@@ -92,7 +80,7 @@ async def upload_product_image(file: UploadFile = File(...)):
         "status": "uploaded",
         "original_filename": file.filename,
         "stored_filename": stored_filename,
-        "content_type": file.content_type,
+        "content_type": verified_content_type,
         "size_bytes": len(contents),
         "message": "Product image uploaded successfully.",
     }
@@ -238,7 +226,20 @@ async def scan_product_image(file: UploadFile | None = File(default=None)):
 
 async def _save_image(file: UploadFile) -> Path:
     """Validate and store an upload without trusting its client-provided name."""
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    contents, image_format = await _validate_image_upload(
+        file, require_content_type_match=True
+    )
+    extension = IMAGE_FORMAT_DETAILS[image_format][1]
+    output_path = UPLOAD_DIR / f"{uuid4().hex}{extension}"
+    output_path.write_bytes(contents)
+    return output_path
+
+
+async def _validate_image_upload(
+    file: UploadFile, *, require_content_type_match: bool
+) -> tuple[bytes, str]:
+    """Read and verify an allowed image, optionally enforcing its declared MIME type."""
+    if require_content_type_match and file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
             detail="Only JPEG, PNG, and WEBP images are allowed.",
@@ -263,22 +264,21 @@ async def _save_image(file: UploadFile) -> Path:
             detail="The uploaded file is not a valid image.",
         ) from exc
 
-    expected_format = {
-        "image/jpeg": "JPEG",
-        "image/png": "PNG",
-        "image/webp": "WEBP",
-    }[file.content_type]
-    if image_format != expected_format:
+    if image_format not in IMAGE_FORMAT_DETAILS:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, and WEBP images are allowed.",
+        )
+
+    expected_format = (
+        "JPEG" if file.content_type == "image/jpeg"
+        else "PNG" if file.content_type == "image/png"
+        else "WEBP" if file.content_type == "image/webp"
+        else None
+    )
+    if require_content_type_match and image_format != expected_format:
         raise HTTPException(
             status_code=400,
             detail="The uploaded file does not match its image content type.",
         )
-
-    extension = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-    }[file.content_type]
-    output_path = UPLOAD_DIR / f"{uuid4().hex}{extension}"
-    output_path.write_bytes(contents)
-    return output_path
+    return contents, image_format

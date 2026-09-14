@@ -162,7 +162,8 @@ _PRODUCT_NEGATIVE_PATTERN = re.compile(
 _IDENTIFIER_ONLY_PATTERN = re.compile(r"^[^A-Za-z]*[0-9][0-9\s-]{5,}[^A-Za-z]*$")
 _ADDRESS_POSTAL_CODE_PATTERN = re.compile(r"\b\d{6}\b")
 _DOMESTIC_PRODUCT_PATTERN = re.compile(
-    r"\b(?:domestic\s+product|for\s+domestic\s+(?:sale|market))\b", re.IGNORECASE
+    r"\b(?:domestic\s+product|for\s+domestic\s+(?:sale|market)|product\s+of\s+india)\b",
+    re.IGNORECASE,
 )
 _WHOLESALE_PATTERN = re.compile(
     r"\b(?:wholesale\s+(?:package|pack)|for\s+wholesale(?:\s+sale)?|not\s+for\s+retail\s+sale)\b",
@@ -346,7 +347,12 @@ def _extract_consumer_care(lines: list[str], layout: SpatialLayout | None = None
                 continue
             values = [_normalize_value(match.group(1))]
             for following in layout.below_in_region(detection):
-                if _is_label_line(following.text) or "entity" in following.cues or "nutrition" in following.cues or "identifier" in following.cues:
+                if (
+                    (_is_label_line(following.text) and not _CONSUMER_CARE_PATTERN.match(following.text))
+                    or "entity" in following.cues
+                    or "nutrition" in following.cues
+                    or "identifier" in following.cues
+                ):
                     break
                 values.append(following.text)
             value = _normalize_value(" ".join(part for part in values if part))
@@ -359,7 +365,7 @@ def _extract_consumer_care(lines: list[str], layout: SpatialLayout | None = None
 
         section = [_normalize_value(match.group(1))]
         for following_line in lines[index + consumed + 1 :]:
-            if _is_label_line(following_line):
+            if _is_label_line(following_line) and not _CONSUMER_CARE_PATTERN.match(following_line):
                 break
             section.append(following_line)
         return _normalize_value(" ".join(value for value in section if value))
@@ -907,7 +913,7 @@ def _extract_product_name(
     # Explicit labels retain their existing semantics.  For unlabeled titles,
     # use visual prominence rather than flattening columns into OCR order.
     if layout and layout.has_geometry:
-        candidates: list[tuple[float, int, str]] = []
+        candidates: list[tuple[float, int, str, bool]] = []
         positioned = [item for item in layout.detections if item.bounds]
         min_top = min((item.bounds[1] for item in positioned), default=0.0)  # type: ignore[index]
         max_height = max((item.bounds[3] - item.bounds[1] for item in positioned), default=1.0)  # type: ignore[index]
@@ -924,21 +930,37 @@ def _extract_product_name(
             # A generic product declaration is normally descriptive, while a
             # standalone word is more likely to be a brand or marketing mark.
             # This is deliberately a preference, not an exclusion.
-            if len(re.findall(r"[A-Za-z]{2,}", value)) >= 2:
+            descriptive = len(re.findall(r"[A-Za-z]{2,}", value)) >= 2
+            if descriptive:
                 score += 0.55
             else:
                 score -= 0.10
             if item.cues:
                 score -= 0.8
-            candidates.append((score, -item.index, value))
+            # Short repeated phrases in one compact panel are usually a
+            # marketing badge (for example, a three-line quality claim), not
+            # three alternative product titles.  Likewise, text nestled
+            # directly under an oversized standalone mark is usually its
+            # tagline.  These are spatial relationships, not brand words, so
+            # the treatment remains category-neutral.
+            if _is_repeated_spatial_phrase(item, layout):
+                score -= 0.65
+            if _is_brand_tagline(item, layout):
+                score -= 0.45
+            candidates.append((score, -item.index, value, descriptive))
         if candidates:
-            score, _, value = max(candidates)
+            # A high-confidence descriptive title is stronger product evidence
+            # than a standalone mark in the same visual title area.  Keep a
+            # standalone candidate as the fallback so one-word product names
+            # remain valid when no descriptive title is present.
+            descriptive_candidates = [candidate for candidate in candidates if candidate[3]]
+            score, _, value, _ = max(descriptive_candidates or candidates)
             if score >= 0.9:
                 return value
 
     declaration_indexes = [index for index, line in enumerate(lines) if _is_label_line(line)]
     first_declaration = declaration_indexes[0] if declaration_indexes else None
-    candidates: list[tuple[float, int, str]] = []
+    candidates: list[tuple[float, int, str, bool]] = []
     for index, line in enumerate(lines):
         value = _product_candidate_value(line)
         confidence = confidence_by_line.get(line)
@@ -946,14 +968,23 @@ def _extract_product_name(
             continue
         score = 1.0 if first_declaration is not None and index < first_declaration else 0.0
         score += min(confidence, 1.0) if confidence is not None else 0.35
-        if len(re.findall(r"[A-Za-z]{2,}", value)) >= 2:
+        descriptive = len(re.findall(r"[A-Za-z]{2,}", value)) >= 2
+        if descriptive:
             score += 0.25
         if value.isupper():
             score += 0.1
-        candidates.append((score, index, value))
+        candidates.append((score, index, value, descriptive))
     if not candidates:
         return None
-    score, _, value = max(candidates, key=lambda candidate: (candidate[0], -candidate[1]))
+    descriptive_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate[3] and first_declaration is not None and candidate[1] < first_declaration
+    ]
+    score, _, value, _ = max(
+        descriptive_candidates or candidates,
+        key=lambda candidate: (candidate[0], -candidate[1]),
+    )
     return value if score >= 1.15 else None
 
 
@@ -966,6 +997,39 @@ def _product_candidate_value(value: str) -> str | None:
     if match and _quantity_from_text(match.group(2)):
         return _normalize_value(match.group(1))
     return normalized
+
+
+def _is_repeated_spatial_phrase(item: Any, layout: SpatialLayout) -> bool:
+    """Return whether a phrase is part of a repeated marketing series."""
+    words = re.findall(r"[A-Za-z]{2,}", item.text.casefold())
+    if len(words) < 2:
+        return False
+    first_word = words[0]
+    for other in layout.in_region(item):
+        if other.index == item.index or not layout.related(item, other):
+            continue
+        other_words = re.findall(r"[A-Za-z]{2,}", other.text.casefold())
+        if len(other_words) >= 2 and other_words[0] == first_word:
+            return True
+    return False
+
+
+def _is_brand_tagline(item: Any, layout: SpatialLayout) -> bool:
+    """Return whether descriptive text is visually attached to a wordmark."""
+    if item.bounds is None:
+        return False
+    left, top, right, _ = item.bounds
+    for other in layout.in_region(item):
+        if other.index == item.index or other.bounds is None:
+            continue
+        if len(re.findall(r"[A-Za-z]{2,}", other.text)) != 1:
+            continue
+        other_left, _, other_right, other_bottom = other.bounds
+        horizontally_nested = left >= other_left and right <= other_right
+        immediately_below = top <= other_bottom + layout.line_height
+        if horizontally_nested and immediately_below:
+            return True
+    return False
 
 
 def _looks_like_product_name(value: str, confidence: float | None = None) -> bool:
