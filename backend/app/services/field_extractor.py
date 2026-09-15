@@ -92,7 +92,7 @@ _DATE_TYPE_PATTERNS = (
         "packing_date",
         re.compile(
             r"\b(?:month\s*(?:&|and)\s*year\s+of\s+packing|date\s+of\s+packing|"
-            r"pkd\.?t?\.?(?:\s*date)?|packed(?:\s+(?:date|on))?|packing(?:\s+date)?)\b"
+            r"p(?:kd|kt)\.?t?\.?(?:\s*date)?|packed(?:\s+(?:date|on))?|packing(?:\s+date)?)\b"
             r"\s*[:\-.]?\s*(.*)$",
             re.IGNORECASE,
         ),

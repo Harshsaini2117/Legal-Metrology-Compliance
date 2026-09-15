@@ -1,12 +1,14 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import cv2
 import numpy as np
 
-from backend.app.services.ocr import extract_text
+from backend.app.services.field_extractor import extract_fields
+from backend.app.services.ocr import _run_tesseract_ocr, extract_text
 
 
 class FakePaddleOcr:
@@ -61,6 +63,60 @@ class SmallTextRetryPaddleOcr:
 
 
 class ExtractTextTests(unittest.TestCase):
+    def test_tesseract_groups_native_word_tokens_into_extractable_lines(self):
+        data = {
+            "text": ["MRP:", "Rs.", "99", "(Incl.", "of", "all", "taxes)"],
+            "conf": ["94", "95", "96", "93", "94", "95", "96"],
+            "left": [10, 55, 95, 10, 60, 85, 115],
+            "top": [20, 20, 20, 45, 45, 45, 45],
+            "width": [38, 30, 22, 48, 18, 22, 48],
+            "height": [14, 14, 14, 14, 14, 14, 14],
+            "block_num": [1, 1, 1, 1, 1, 1, 1],
+            "par_num": [1, 1, 1, 1, 1, 1, 1],
+            "line_num": [1, 1, 1, 2, 2, 2, 2],
+        }
+        fake_tesseract = SimpleNamespace(
+            Output=SimpleNamespace(DICT=object()),
+            image_to_data=lambda image, config, output_type: data,
+            pytesseract=SimpleNamespace(tesseract_cmd=None),
+        )
+
+        with patch.dict("sys.modules", {"pytesseract": fake_tesseract}):
+            results = _run_tesseract_ocr(np.full((80, 180, 3), 255, dtype=np.uint8))
+
+        self.assertEqual([item["text"] for item in results], ["MRP: Rs. 99", "(Incl. of all taxes)"])
+        self.assertEqual(results[0]["bounding_box"], [[10.0, 20.0], [117.0, 20.0], [117.0, 34.0], [10.0, 34.0]])
+        fields = extract_fields(results)
+        self.assertEqual(fields["mrp"], "99")
+        self.assertEqual(fields["mrp_inclusive_of_taxes"], "Incl. of all taxes")
+
+    def test_tesseract_uses_one_sparse_lower_panel_retry_for_declaration_poor_output(self):
+        primary = [
+            {"text": "Everyday goodness", "confidence": 0.95, "bounding_box": None},
+            {"text": "Roasted snack", "confidence": 0.94, "bounding_box": None},
+            {"text": "Fresh and crunchy", "confidence": 0.93, "bounding_box": None},
+            {"text": "Great taste", "confidence": 0.92, "bounding_box": None},
+        ]
+        retry = [
+            {
+                "text": "MRP: Rs. 99 (Incl. of all taxes)",
+                "confidence": 0.94,
+                "bounding_box": [[15, 10], [210, 10], [210, 25], [15, 25]],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            image_path = Path(temporary_directory) / "label.png"
+            self.assertTrue(cv2.imwrite(str(image_path), np.full((100, 200, 3), 255, dtype=np.uint8)))
+            with (
+                patch.dict("os.environ", {"OCR_BACKEND": "tesseract"}, clear=False),
+                patch("backend.app.services.ocr._run_selected_ocr", side_effect=[primary, retry]) as runner,
+            ):
+                results = extract_text(image_path)
+
+        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(runner.call_args_list[1].kwargs["tesseract_psm"], 11)
+        self.assertIn("MRP: Rs. 99 (Incl. of all taxes)", [item["text"] for item in results])
+
     def test_returns_text_confidence_and_bounding_box(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             image_path = Path(temporary_directory) / "label.png"

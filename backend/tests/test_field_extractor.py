@@ -210,6 +210,13 @@ class FieldExtractorTests(unittest.TestCase):
                 self.assertEqual(fields["mrp"], expected_mrp)
                 self.assertEqual(fields["mrp_inclusive_of_taxes"], expected_tax)
 
+    def test_extracts_packing_date_from_common_pkt_abbreviation(self):
+        fields = extract_fields([{"text": "PKT: 08/2026"}])
+
+        self.assertEqual(fields["packing_date"], "08/2026")
+        self.assertEqual(fields["month_year"], "08/2026")
+        self.assertEqual(fields["month_year_date_type"], "packing_date")
+
     def test_links_standalone_tax_wording_to_the_adjacent_mrp_declaration(self):
         fields = extract_fields(
             [

@@ -66,6 +66,19 @@ def extract_text(image_path: PathLike) -> list[dict[str, Any]]:
     primary = _run_selected_ocr(backend, engine, image)
 
     if not _needs_retry(primary):
+        # Tesseract's default block mode is useful for the large artwork and
+        # title text on a package, but it can miss the dense declaration panel.
+        # A single sparse-text pass over that panel is only worthwhile when
+        # the first pass did not identify enough declaration anchors.
+        if backend == "tesseract" and _needs_tesseract_declaration_retry(primary):
+            retry_image, y_offset, scale = _small_text_retry_image(image)
+            retry = _restore_retry_coordinates(
+                _run_selected_ocr(backend, engine, retry_image, tesseract_psm=11),
+                scale,
+                y_offset,
+            )
+            return _merge_declaration_retry(primary, retry)
+
         if _needs_small_text_retry(primary):
             retry_image, y_offset, scale = _small_text_retry_image(image)
             return _merge_declaration_retry(
@@ -100,15 +113,21 @@ def _run_selected_ocr(
     backend: str,
     engine: Any,
     image: np.ndarray,
+    *,
+    tesseract_psm: int = 6,
 ) -> list[dict[str, Any]]:
     """Run the configured OCR backend using the common OCR contract."""
     if backend == "tesseract":
-        return _run_tesseract_ocr(image)
+        return _run_tesseract_ocr(image, psm=tesseract_psm)
 
     return _run_ocr(engine, image)
 
 
-def _run_tesseract_ocr(image: np.ndarray) -> list[dict[str, Any]]:
+def _run_tesseract_ocr(
+    image: np.ndarray,
+    *,
+    psm: int = 6,
+) -> list[dict[str, Any]]:
     """Run Tesseract OCR and normalize its output to the project OCR contract."""
     try:
         import pytesseract
@@ -127,7 +146,7 @@ def _run_tesseract_ocr(image: np.ndarray) -> list[dict[str, Any]]:
     try:
         data = pytesseract.image_to_data(
             image,
-            config="--psm 6",
+            config=f"--psm {psm}",
             output_type=pytesseract.Output.DICT,
         )
     except Exception as exc:
@@ -135,14 +154,19 @@ def _run_tesseract_ocr(image: np.ndarray) -> list[dict[str, Any]]:
             "Unable to run the Tesseract OCR engine."
         ) from exc
 
-    results: list[dict[str, Any]] = []
-
     text_values = data.get("text", [])
     confidences = data.get("conf", [])
     left_values = data.get("left", [])
     top_values = data.get("top", [])
     width_values = data.get("width", [])
     height_values = data.get("height", [])
+
+    # image_to_data returns words, whereas the rest of the service operates
+    # on detected text lines.  Returning individual words makes declarations
+    # such as "MRP: Rs. 99" impossible for the conservative extractor to
+    # associate.  Group only Tesseract's own line identifiers; this does not
+    # invent text or merge words across visual lines.
+    groups: dict[tuple[Any, Any, Any], list[dict[str, Any]]] = {}
 
     for index, raw_text in enumerate(text_values):
         text = str(raw_text).strip()
@@ -155,30 +179,71 @@ def _run_tesseract_ocr(image: np.ndarray) -> list[dict[str, Any]]:
         except (IndexError, TypeError, ValueError):
             confidence = 0.0
 
-        try:
-            left = float(left_values[index])
-            top = float(top_values[index])
-            width = float(width_values[index])
-            height = float(height_values[index])
-        except (IndexError, TypeError, ValueError):
-            bounding_box = None
-        else:
-            bounding_box = [
-                [left, top],
-                [left + width, top],
-                [left + width, top + height],
-                [left, top + height],
-            ]
-
-        results.append(
-            {
-                "text": text,
-                "confidence": confidence,
-                "bounding_box": bounding_box,
-            }
+        box = _tesseract_box(left_values, top_values, width_values, height_values, index)
+        key = _tesseract_line_key(data, index)
+        groups.setdefault(key, []).append(
+            {"text": text, "confidence": confidence, "bounding_box": box}
         )
 
-    return results
+    return [_merge_tesseract_line(words) for words in groups.values()]
+
+
+def _tesseract_line_key(data: Mapping[str, Any], index: int) -> tuple[Any, Any, Any]:
+    """Return Tesseract's native block/paragraph/line identifier.
+
+    Test doubles and unusual engine output may omit these fields.  In that
+    case each word remains its own detection instead of being guessed into a
+    line.
+    """
+    identifiers: list[Any] = []
+    for name in ("block_num", "par_num", "line_num"):
+        values = data.get(name, [])
+        try:
+            identifiers.append(values[index])
+        except IndexError:
+            return ("word", index, index)
+    return tuple(identifiers)  # type: ignore[return-value]
+
+
+def _tesseract_box(
+    left_values: Any,
+    top_values: Any,
+    width_values: Any,
+    height_values: Any,
+    index: int,
+) -> list[list[float]] | None:
+    try:
+        left = float(left_values[index])
+        top = float(top_values[index])
+        width = float(width_values[index])
+        height = float(height_values[index])
+    except (IndexError, TypeError, ValueError):
+        return None
+    return [[left, top], [left + width, top], [left + width, top + height], [left, top + height]]
+
+
+def _merge_tesseract_line(words: list[dict[str, Any]]) -> dict[str, Any]:
+    """Combine words from one native Tesseract line and retain its extent."""
+    boxes = [_box_bounds(word.get("bounding_box")) for word in words]
+    usable_boxes = [box for box in boxes if box is not None]
+    bounding_box = None
+    if usable_boxes:
+        left = min(box[0] for box in usable_boxes)
+        top = min(box[1] for box in usable_boxes)
+        right = max(box[2] for box in usable_boxes)
+        bottom = max(box[3] for box in usable_boxes)
+        bounding_box = [[left, top], [right, top], [right, bottom], [left, bottom]]
+
+    confidences = [
+        float(word["confidence"])
+        for word in words
+        if isinstance(word.get("confidence"), (int, float)) and float(word["confidence"]) >= 0
+    ]
+    return {
+        "text": " ".join(str(word["text"]) for word in words),
+        "confidence": sum(confidences) / len(confidences) if confidences else 0.0,
+        "bounding_box": bounding_box,
+    }
 
 def _needs_retry(results: list[dict[str, Any]]) -> bool:
     if len(results) < _RETRY_MIN_DETECTIONS:
@@ -247,6 +312,15 @@ def _needs_small_text_retry(results: list[dict[str, Any]]) -> bool:
         and any(_ENTITY_CUE_PATTERN.search(text) for text in texts)
         and not any(_SMALL_TEXT_CUE_PATTERN.search(text) for text in texts)
     )
+
+
+def _needs_tesseract_declaration_retry(results: list[dict[str, Any]]) -> bool:
+    """Use one targeted sparse-text retry only for declaration-poor output."""
+    anchors = sum(
+        any(term in str(item.get("text", "")).casefold() for term in _DECLARATION_TERMS)
+        for item in results
+    )
+    return bool(results) and anchors < 2
 
 
 def _small_text_retry_image(
@@ -354,6 +428,20 @@ def _is_meaningful_retry_detection(
         return False
 
     if _SMALL_TEXT_CUE_PATTERN.search(text):
+        return True
+
+    # Whole declaration lines are independently meaningful evidence.  Their
+    # accompanying value is on the same Tesseract line, so accepting them
+    # cannot turn an unlabelled number or date into a declaration.
+    if re.search(
+        r"\b(?:m\s*\.?r\s*\.?p\s*\.?|maximum\s+retail\s+price|"
+        r"net\s*(?:quantity|qty|contents|weight|wt\.?)|"
+        r"manufactured|manufacturer|imported|importer|packed|packer|"
+        r"mfg\.?|mfd\.?|pkd\.?|consumer|customer|helpline|"
+        r"country\s+of\s+origin|made\s+in|product\s+of)\b",
+        text,
+        re.IGNORECASE,
+    ):
         return True
 
     return _is_address_fragment(text) and _nearby_entity_declaration(
