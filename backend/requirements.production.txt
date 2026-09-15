@@ -1,0 +1,10 @@
+# Docker/Render runtime dependencies for the Tesseract OCR backend.
+# Keep backend/requirements.txt unchanged for local PaddleOCR development.
+fastapi==0.141.1
+numpy==2.3.5
+opencv-python-headless==5.0.0.93
+pillow==12.3.0
+pytesseract==0.3.13
+python-multipart==0.0.32
+reportlab==5.0.1
+uvicorn==0.52.4

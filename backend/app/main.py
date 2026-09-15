@@ -1,5 +1,6 @@
 from io import BytesIO
 import logging
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,7 +11,8 @@ from PIL import Image, UnidentifiedImageError
 
 from .runtime import configure_paddle_runtime
 
-configure_paddle_runtime()
+if os.getenv("OCR_BACKEND", "paddle").strip().lower() != "tesseract":
+    configure_paddle_runtime()
 
 from .services.report_generator import generate_compliance_report
 from .services.scan_repository import ScanRepository
