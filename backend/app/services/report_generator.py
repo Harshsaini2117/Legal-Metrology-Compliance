@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from html import escape
+import os
 from os import PathLike
 from pathlib import Path
 from typing import Any
@@ -48,7 +49,6 @@ _STATUS_COLORS = {
 }
 _FONT_NAME = "SIH26034Report"
 _FONT_BOLD_NAME = "SIH26034ReportBold"
-_FONT_DIRECTORY = Path("C:/Windows/Fonts")
 
 
 def generate_compliance_report(scan_result: Mapping[str, Any], output_path: str | PathLike[str]) -> Path:
@@ -137,11 +137,25 @@ def _styles() -> dict[str, ParagraphStyle]:
 
 
 def _register_report_fonts() -> None:
-    """Embed a Unicode-capable font so Indian rupee amounts render correctly."""
+    """Register portable Unicode fonts for report text and currency symbols."""
+    regular_font, bold_font = _report_font_paths()
     if _FONT_NAME not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont(_FONT_NAME, str(_FONT_DIRECTORY / "arial.ttf")))
+        pdfmetrics.registerFont(TTFont(_FONT_NAME, str(regular_font)))
     if _FONT_BOLD_NAME not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont(_FONT_BOLD_NAME, str(_FONT_DIRECTORY / "arialbd.ttf")))
+        pdfmetrics.registerFont(TTFont(_FONT_BOLD_NAME, str(bold_font)))
+
+
+def _report_font_paths() -> tuple[Path, Path]:
+    """Return Unicode font files supplied by the current runtime platform."""
+    if os.name == "nt":
+        windows_directory = os.environ.get("WINDIR") or os.environ.get("SystemRoot")
+        if not windows_directory:
+            raise RuntimeError("Windows font directory is not available.")
+        font_directory = Path(windows_directory) / "Fonts"
+        return font_directory / "arial.ttf", font_directory / "arialbd.ttf"
+
+    font_directory = Path("/usr/share/fonts/truetype/dejavu")
+    return font_directory / "DejaVuSans.ttf", font_directory / "DejaVuSans-Bold.ttf"
 
 
 def _summary_table(scan_result: Mapping[str, Any], compliance: Mapping[str, Any], styles: Mapping[str, ParagraphStyle]) -> Table:

@@ -2,10 +2,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.app.services.report_generator import _format_mrp, generate_compliance_report
+from backend.app.services.report_generator import (
+    _format_mrp,
+    _report_font_paths,
+    generate_compliance_report,
+)
 
 
 class ReportGeneratorTests(unittest.TestCase):
+    def test_uses_runtime_unicode_font_files(self):
+        regular_font, bold_font = _report_font_paths()
+
+        self.assertTrue(regular_font.is_file())
+        self.assertTrue(bold_font.is_file())
+
     def test_generates_readable_pdf_with_scan_content(self):
         scan_result = {
             "input_image": "data/raw/coffee-label.jpg",
