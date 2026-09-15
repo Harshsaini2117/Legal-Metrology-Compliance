@@ -231,7 +231,14 @@ def _get_ocr_engine() -> Any:
         ) from exc
 
     try:
-        return PaddleOCR(lang="en", use_angle_cls=True)
+        return PaddleOCR(
+    lang="en",
+    text_detection_model_name="PP-OCRv5_mobile_det",
+    text_recognition_model_name="PP-OCRv5_mobile_rec",
+    use_doc_orientation_classify=False,
+    use_doc_unwarping=False,
+    use_textline_orientation=False,
+)
     except Exception as exc:
         raise RuntimeError("Unable to initialize the PaddleOCR engine.") from exc
 

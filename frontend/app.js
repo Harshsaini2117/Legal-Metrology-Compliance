@@ -22,8 +22,7 @@ const processingDescription = document.querySelector('#processing-description');
 const processingIndicator = document.querySelector('#processing-indicator');
 const processingStages = [...document.querySelectorAll('.processing-stages li')];
 const workflowSteps = [...document.querySelectorAll('.workflow li')];
-const API_BASE_URL = 'http://127.0.0.1:8000';
-
+const API_BASE_URL = 'https://legal-metrology-compliance-j8iq.onrender.com';
 let selectedFile = null;
 let previewUrl = null;
 let historyLoading = false;
